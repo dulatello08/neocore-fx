@@ -2,6 +2,10 @@
 
 WIP!!
 
+NeoCore-FX RTL and testbench code are licensed under Apache License 2.0.
+The NeoCore-FX and NeoCore16x32 toolchain is licensed separately under GPL-3.0.
+See the LICENSE files in each repository for details.
+
 ## Directory Layout
 
 ```text
