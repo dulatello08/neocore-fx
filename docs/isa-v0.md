@@ -12,6 +12,8 @@ Target: Lattice ECP5, single-issue, deep-pipeline, frequency-focused fixed-width
 | [far-branching.md](far-branching.md) | Far branch/call expansion strategy, linker veneers |
 | [pc-relative.md](pc-relative.md) | Exact PC-relative semantics, offset computation, PIC patterns |
 | [exceptions-future.md](exceptions-future.md) | Future exception model entry point (v0 has no exceptions) |
+| [bus-architecture.md](bus-architecture.md) | NCX Bus protocol, address map, phased memory system evolution |
+| [microarchitecture.md](microarchitecture.md) | 6-stage pipeline design, hazards, forwarding, branch prediction |
 
 ## 1) Locked Decisions (Current)
 
