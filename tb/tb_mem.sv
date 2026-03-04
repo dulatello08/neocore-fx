@@ -1,11 +1,18 @@
+//
+// tb_mem.sv
+// Unit testbench for memory model
+//
+
 `timescale 1ns/1ps
 
-module tb_ncfx_mem;
+module tb_mem;
     localparam int CLK_HALF_PERIOD_NS = 5;
 
+    // Clock/reset.
     logic        clk;
     logic        rst_n;
 
+    // I-Bus interface.
     logic        ibus_cyc;
     logic        ibus_stb;
     logic [31:0] ibus_addr;
@@ -13,6 +20,7 @@ module tb_ncfx_mem;
     logic [31:0] ibus_rdata;
     logic        ibus_err;
 
+    // D-Bus interface.
     logic        dbus_cyc;
     logic        dbus_stb;
     logic        dbus_we;
@@ -23,10 +31,11 @@ module tb_ncfx_mem;
     logic [31:0] dbus_rdata;
     logic        dbus_err;
 
+    // Scoreboard counters.
     int pass_count;
     int fail_count;
 
-    ncfx_mem dut (
+    mem dut (
         .clk        (clk),
         .rst_n      (rst_n),
         .ibus_cyc   (ibus_cyc),
@@ -149,8 +158,8 @@ module tb_ncfx_mem;
         fail_count = 0;
 
         if ($test$plusargs("WAVES")) begin
-            $dumpfile("tb_ncfx_mem.vcd");
-            $dumpvars(0, tb_ncfx_mem);
+            $dumpfile("tb_mem.vcd");
+            $dumpvars(0, tb_mem);
         end
 
         repeat (4) @(posedge clk);
@@ -242,7 +251,7 @@ module tb_ncfx_mem;
 
         $display("PASS=%0d FAIL=%0d", pass_count, fail_count);
         if (fail_count != 0) begin
-            $fatal(1, "tb_ncfx_mem failed");
+            $fatal(1, "tb_mem failed");
         end
         $finish;
     end

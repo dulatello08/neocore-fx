@@ -13,7 +13,7 @@ FPGA_BUILD_DIR ?= $(BUILD_ROOT)/fpga
 WAVE_DIR ?= $(BUILD_ROOT)/waves
 
 SIM_FILELIST ?= filelists/sim.f
-SIM_TOP ?= tb_neocorefx_top
+SIM_TOP ?= tb_biu
 SIM_BIN ?= $(SIM_BUILD_DIR)/simv
 IVERILOG_FLAGS ?= -g2012 -Wall -Winfloop
 VVP_ARGS ?=

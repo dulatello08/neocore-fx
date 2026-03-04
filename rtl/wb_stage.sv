@@ -1,9 +1,10 @@
 //
-// ncfx_wb_stage.sv
+// wb_stage.sv
 // NeoCoreFX - WB (register write control)
 //
 
-module ncfx_wb_stage (
+module wb_stage (
+    // MEM -> WB pipeline inputs.
     input  logic        memwb_valid_i,
     input  logic [3:0]  memwb_rd_i,
     input  logic        memwb_reg_write_i,
@@ -12,10 +13,12 @@ module ncfx_wb_stage (
     input  logic        memwb_fetch_fault_i,
     input  logic        memwb_illegal_i,
 
+    // Register file write port.
     output logic        rf_we_o,
     output logic [3:0]  rf_waddr_o,
     output logic [31:0] rf_wdata_o,
 
+    // Writeback status outputs.
     output logic        wb_valid_o,
     output logic        wb_fault_o
 );

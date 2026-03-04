@@ -1,30 +1,35 @@
 //
-// ncfx_if2_stage.sv
+// if2_stage.sv
 // NeoCoreFX - IF2 (fetch response latch + static BTFNT prediction)
 //
 
-module ncfx_if2_stage
-  import ncfx_core_pkg::*;
+module if2_stage
+  import core_pkg::*;
 (
+    // Clock/reset and pipeline control.
     input  logic        clk,
     input  logic        rst,
     input  logic        stall_i,
     input  logic        flush_i,
 
+    // IF1 pipeline inputs.
     input  logic        if1_valid_i,
     input  logic [31:0] if1_pc_i,
     input  logic        if1_pred_taken_i,
 
+    // BIU instruction response.
     input  logic        i_done_i,
     input  logic [31:0] i_rdata_i,
     input  logic        i_err_i,
 
+    // IF2 -> ID pipeline outputs.
     output logic        id_valid_o,
     output logic [31:0] id_pc_o,
     output logic [31:0] id_inst_o,
     output logic        id_pred_taken_o,
     output logic        id_fetch_fault_o,
 
+    // Predictor feedback toward IF1.
     output logic        pred_valid_o,
     output logic        pred_taken_o,
     output logic [31:0] pred_target_o
@@ -46,8 +51,8 @@ module ncfx_if2_stage
         off16_f = {i_rdata_i[23:20], i_rdata_i[11:0]};
         off20_f = i_rdata_i[19:0];
 
-        branch_target_f = if1_pc_i + ncfx_sext16_shift2(off16_f);
-        jal_target_f = if1_pc_i + ncfx_sext20_shift2(off20_f);
+        branch_target_f = if1_pc_i + sext16_shift2(off16_f);
+        jal_target_f = if1_pc_i + sext20_shift2(off20_f);
 
         pred_valid_o = 1'b0;
         pred_taken_o = 1'b0;

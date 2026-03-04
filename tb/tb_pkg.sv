@@ -4,6 +4,4 @@ package tb_pkg;
 
     parameter int CLK_HALF_PERIOD_NS = 5;
     parameter int RESET_CYCLES = 4;
-    parameter int SMOKE_EXPECTED_COUNT = 12;
 endpackage
-

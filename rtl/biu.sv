@@ -1,9 +1,9 @@
 //
-// ncfx_biu.sv
+// biu.sv
 // NeoCoreFX - Bus Interface Unit (combinational bridge)
 //
 
-module ncfx_biu (
+module biu (
     input  logic        clk,
     input  logic        rst,
 
@@ -48,9 +48,9 @@ module ncfx_biu (
     timeunit 1ns;
     timeprecision 1ps;
 
-    localparam logic [1:0] NCFX_SIZE_BYTE = 2'b00;
-    localparam logic [1:0] NCFX_SIZE_HALF = 2'b01;
-    localparam logic [1:0] NCFX_SIZE_WORD = 2'b10;
+    localparam logic [1:0] SIZE_BYTE = 2'b00;
+    localparam logic [1:0] SIZE_HALF = 2'b01;
+    localparam logic [1:0] SIZE_WORD = 2'b10;
 
     logic i_aligned;
     logic i_req_valid;
@@ -62,21 +62,21 @@ module ncfx_biu (
     logic d_rsp_done;
 
     function automatic logic d_size_valid(input logic [1:0] size);
-        return (size == NCFX_SIZE_BYTE) || (size == NCFX_SIZE_HALF) || (size == NCFX_SIZE_WORD);
+        return (size == SIZE_BYTE) || (size == SIZE_HALF) || (size == SIZE_WORD);
     endfunction
 
     function automatic logic d_is_aligned(input logic [1:0] size, input logic [1:0] lsb);
         case (size)
-            NCFX_SIZE_BYTE: return 1'b1;
-            NCFX_SIZE_HALF: return (lsb[0] == 1'b0);
-            NCFX_SIZE_WORD: return (lsb == 2'b00);
+            SIZE_BYTE: return 1'b1;
+            SIZE_HALF: return (lsb[0] == 1'b0);
+            SIZE_WORD: return (lsb == 2'b00);
             default:        return 1'b0;
         endcase
     endfunction
 
     function automatic logic [3:0] d_gen_sel(input logic [1:0] size, input logic [1:0] lsb);
         case (size)
-            NCFX_SIZE_BYTE: begin
+            SIZE_BYTE: begin
                 case (lsb)
                     2'b00: return 4'b1000;
                     2'b01: return 4'b0100;
@@ -84,14 +84,14 @@ module ncfx_biu (
                     default: return 4'b0001;
                 endcase
             end
-            NCFX_SIZE_HALF: begin
+            SIZE_HALF: begin
                 case (lsb)
                     2'b00: return 4'b1100;
                     2'b10: return 4'b0011;
                     default: return 4'b0000;
                 endcase
             end
-            NCFX_SIZE_WORD: return 4'b1111;
+            SIZE_WORD: return 4'b1111;
             default:        return 4'b0000;
         endcase
     endfunction
@@ -102,7 +102,7 @@ module ncfx_biu (
         input logic [31:0] data
     );
         case (size)
-            NCFX_SIZE_BYTE: begin
+            SIZE_BYTE: begin
                 case (lsb)
                     2'b00: return {data[7:0], 24'h000000};
                     2'b01: return {8'h00, data[7:0], 16'h0000};
@@ -110,14 +110,14 @@ module ncfx_biu (
                     default: return {24'h000000, data[7:0]};
                 endcase
             end
-            NCFX_SIZE_HALF: begin
+            SIZE_HALF: begin
                 case (lsb)
                     2'b00: return {data[15:0], 16'h0000};
                     2'b10: return {16'h0000, data[15:0]};
                     default: return 32'h0000_0000;
                 endcase
             end
-            NCFX_SIZE_WORD: return data;
+            SIZE_WORD: return data;
             default:        return 32'h0000_0000;
         endcase
     endfunction
@@ -128,7 +128,7 @@ module ncfx_biu (
         input logic [1:0]  lsb
     );
         case (size)
-            NCFX_SIZE_BYTE: begin
+            SIZE_BYTE: begin
                 case (lsb)
                     2'b00: return {24'h000000, word_data[31:24]};
                     2'b01: return {24'h000000, word_data[23:16]};
@@ -136,14 +136,14 @@ module ncfx_biu (
                     default: return {24'h000000, word_data[7:0]};
                 endcase
             end
-            NCFX_SIZE_HALF: begin
+            SIZE_HALF: begin
                 case (lsb)
                     2'b00: return {16'h0000, word_data[31:16]};
                     2'b10: return {16'h0000, word_data[15:0]};
                     default: return 32'h0000_0000;
                 endcase
             end
-            NCFX_SIZE_WORD: return word_data;
+            SIZE_WORD: return word_data;
             default:        return 32'h0000_0000;
         endcase
     endfunction

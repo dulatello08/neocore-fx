@@ -1,16 +1,18 @@
 //
-// ncfx_exe_stage.sv
+// exe_stage.sv
 // NeoCoreFX - EXE (forward mux + ALU + branch/jump resolution)
 //
 
-module ncfx_exe_stage
-  import ncfx_core_pkg::*;
+module exe_stage
+  import core_pkg::*;
 (
+    // Clock/reset and pipeline control.
     input  logic        clk,
     input  logic        rst,
     input  logic        stall_i,
     input  logic        flush_i,
 
+    // ID -> EXE pipeline inputs.
     input  logic        id_valid_i,
     input  logic [31:0] id_pc_i,
     input  logic [3:0]  id_rd_i,
@@ -37,13 +39,16 @@ module ncfx_exe_stage
     input  logic [1:0]  id_fwd_rs1_sel_i,
     input  logic [1:0]  id_fwd_rs2_sel_i,
 
+    // Forwarded data sources.
     input  logic [31:0] mem_fwd_data_i,
     input  logic [31:0] wb_fwd_data_i,
 
+    // Redirect / branch resolution outputs.
     output logic        redirect_valid_o,
     output logic [31:0] redirect_pc_o,
     output logic        mispredict_o,
 
+    // EXE -> MEM pipeline outputs.
     output logic        mem_valid_o,
     output logic [3:0]  mem_rd_o,
     output logic [3:0]  mem_store_rs2_addr_o,
@@ -83,15 +88,15 @@ module ncfx_exe_stage
     always_comb begin
         rs1_final = id_rs1_data_i;
         case (id_fwd_rs1_sel_i)
-            NCFX_FWD_MEM: rs1_final = mem_fwd_data_i;
-            NCFX_FWD_WB:  rs1_final = wb_fwd_data_i;
+            FWD_MEM: rs1_final = mem_fwd_data_i;
+            FWD_WB:  rs1_final = wb_fwd_data_i;
             default:      rs1_final = id_rs1_data_i;
         endcase
 
         rs2_final = id_rs2_data_i;
         case (id_fwd_rs2_sel_i)
-            NCFX_FWD_MEM: rs2_final = mem_fwd_data_i;
-            NCFX_FWD_WB:  rs2_final = wb_fwd_data_i;
+            FWD_MEM: rs2_final = mem_fwd_data_i;
+            FWD_WB:  rs2_final = wb_fwd_data_i;
             default:      rs2_final = id_rs2_data_i;
         endcase
     end
@@ -104,20 +109,20 @@ module ncfx_exe_stage
 
     always_comb begin
         case (id_alu_op_i)
-            NCFX_ALU_ADD:    alu_result = rs1_final + alu_rhs;
-            NCFX_ALU_SUB:    alu_result = rs1_final - alu_rhs;
-            NCFX_ALU_AND:    alu_result = rs1_final & alu_rhs;
-            NCFX_ALU_OR:     alu_result = rs1_final | alu_rhs;
-            NCFX_ALU_XOR:    alu_result = rs1_final ^ alu_rhs;
-            NCFX_ALU_SLT:    alu_result = ($signed(rs1_final) < $signed(alu_rhs)) ? 32'd1 : 32'd0;
-            NCFX_ALU_SLTU:   alu_result = (rs1_final < alu_rhs) ? 32'd1 : 32'd0;
-            NCFX_ALU_SLL:    alu_result = rs1_final << alu_rhs[4:0];
-            NCFX_ALU_SRL:    alu_result = rs1_final >> alu_rhs[4:0];
-            NCFX_ALU_SRA:    alu_result = $signed(rs1_final) >>> alu_rhs[4:0];
-            NCFX_ALU_MUL:    alu_result = mul_uu[31:0];
-            NCFX_ALU_MULH:   alu_result = mul_ss[63:32];
-            NCFX_ALU_MULHU:  alu_result = mul_uu[63:32];
-            NCFX_ALU_MULHSU: alu_result = mul_su[63:32];
+            ALU_ADD:    alu_result = rs1_final + alu_rhs;
+            ALU_SUB:    alu_result = rs1_final - alu_rhs;
+            ALU_AND:    alu_result = rs1_final & alu_rhs;
+            ALU_OR:     alu_result = rs1_final | alu_rhs;
+            ALU_XOR:    alu_result = rs1_final ^ alu_rhs;
+            ALU_SLT:    alu_result = ($signed(rs1_final) < $signed(alu_rhs)) ? 32'd1 : 32'd0;
+            ALU_SLTU:   alu_result = (rs1_final < alu_rhs) ? 32'd1 : 32'd0;
+            ALU_SLL:    alu_result = rs1_final << alu_rhs[4:0];
+            ALU_SRL:    alu_result = rs1_final >> alu_rhs[4:0];
+            ALU_SRA:    alu_result = $signed(rs1_final) >>> alu_rhs[4:0];
+            ALU_MUL:    alu_result = mul_uu[31:0];
+            ALU_MULH:   alu_result = mul_ss[63:32];
+            ALU_MULHU:  alu_result = mul_uu[63:32];
+            ALU_MULHSU: alu_result = mul_su[63:32];
             default:         alu_result = rs1_final;
         endcase
     end
@@ -125,11 +130,11 @@ module ncfx_exe_stage
     always_comb begin
         branch_taken = 1'b0;
         case (id_branch_type_i)
-            NCFX_BR_UNCOND: branch_taken = 1'b1;
-            NCFX_BR_EQ:     branch_taken = (rs1_final == rs2_final);
-            NCFX_BR_NE:     branch_taken = (rs1_final != rs2_final);
-            NCFX_BR_LT:     branch_taken = ($signed(rs1_final) < $signed(rs2_final));
-            NCFX_BR_LTU:    branch_taken = (rs1_final < rs2_final);
+            BR_UNCOND: branch_taken = 1'b1;
+            BR_EQ:     branch_taken = (rs1_final == rs2_final);
+            BR_NE:     branch_taken = (rs1_final != rs2_final);
+            BR_LT:     branch_taken = ($signed(rs1_final) < $signed(rs2_final));
+            BR_LTU:    branch_taken = (rs1_final < rs2_final);
             default:        branch_taken = 1'b0;
         endcase
     end
@@ -141,14 +146,14 @@ module ncfx_exe_stage
 
     assign actual_taken = id_is_jal_i
                        || id_is_jalr_i
-                       || ((id_branch_type_i != NCFX_BR_NONE) && branch_taken);
+                       || ((id_branch_type_i != BR_NONE) && branch_taken);
 
     always_comb begin
         if (id_is_jalr_i) begin
             actual_target = jalr_target;
         end else if (id_is_jal_i) begin
             actual_target = jal_target;
-        end else if ((id_branch_type_i != NCFX_BR_NONE) && branch_taken) begin
+        end else if ((id_branch_type_i != BR_NONE) && branch_taken) begin
             actual_target = branch_target;
         end else begin
             actual_target = fallthrough_pc;
@@ -164,7 +169,7 @@ module ncfx_exe_stage
             if (id_is_jalr_i) begin
                 redirect_valid_o = 1'b1;
                 mispredict_o = 1'b1;
-            end else if (id_is_jal_i || (id_branch_type_i != NCFX_BR_NONE)) begin
+            end else if (id_is_jal_i || (id_branch_type_i != BR_NONE)) begin
                 if (actual_taken != id_pred_taken_i) begin
                     redirect_valid_o = 1'b1;
                     mispredict_o = 1'b1;
@@ -197,7 +202,7 @@ module ncfx_exe_stage
             mem_reg_write_o      <= 1'b0;
             mem_mem_read_o       <= 1'b0;
             mem_mem_write_o      <= 1'b0;
-            mem_mem_size_o       <= NCFX_SIZE_WORD;
+            mem_mem_size_o       <= SIZE_WORD;
             mem_load_sign_ext_o  <= 1'b0;
             mem_result_o         <= 32'h0000_0000;
             mem_store_data_o     <= 32'h0000_0000;
@@ -210,7 +215,7 @@ module ncfx_exe_stage
             mem_reg_write_o      <= 1'b0;
             mem_mem_read_o       <= 1'b0;
             mem_mem_write_o      <= 1'b0;
-            mem_mem_size_o       <= NCFX_SIZE_WORD;
+            mem_mem_size_o       <= SIZE_WORD;
             mem_load_sign_ext_o  <= 1'b0;
             mem_result_o         <= 32'h0000_0000;
             mem_store_data_o     <= 32'h0000_0000;

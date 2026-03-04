@@ -1,4 +1,4 @@
-../rtl/ncfx_mem_pkg.sv
-../rtl/ncfx_mem.sv
-../rtl/ncfx_biu.sv
-../tb/tb_ncfx_biu.sv
+../rtl/mem_pkg.sv
+../rtl/mem.sv
+../rtl/biu.sv
+../tb/tb_biu.sv

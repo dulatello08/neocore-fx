@@ -1,29 +1,35 @@
 //
-// ncfx_if1_stage.sv
+// if1_stage.sv
 // NeoCoreFX - IF1 (PC select + fetch request)
 //
 
-module ncfx_if1_stage #(
+module if1_stage #(
     parameter logic [31:0] RESET_PC = 32'h0000_0000
 ) (
+    // Clock/reset and upstream flow control.
     input  logic        clk,
     input  logic        rst,
     input  logic        stall_i,
 
+    // Redirect path from execute stage.
     input  logic        redirect_valid_i,
     input  logic [31:0] redirect_pc_i,
 
+    // Static predictor input from IF2.
     input  logic        pred_valid_i,
     input  logic        pred_taken_i,
     input  logic [31:0] pred_target_i,
 
+    // BIU instruction request output.
     output logic        i_req_o,
     output logic [31:0] i_addr_o,
 
+    // IF1 -> IF2 pipeline outputs.
     output logic        if2_valid_o,
     output logic [31:0] if2_pc_o,
     output logic        if2_pred_taken_o,
 
+    // Current architectural PC.
     output logic [31:0] pc_o
 );
     timeunit 1ns;

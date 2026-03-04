@@ -1,16 +1,24 @@
+//
+// tb_biu.sv
+// Integration testbench for BIU + memory model
+//
+
 `timescale 1ns/1ps
 
-module tb_ncfx_biu;
+module tb_biu;
     localparam int CLK_HALF_PERIOD_NS = 5;
 
+    // BIU data-size encodings.
     localparam logic [1:0] SIZE_BYTE = 2'b00;
     localparam logic [1:0] SIZE_HALF = 2'b01;
     localparam logic [1:0] SIZE_WORD = 2'b10;
 
+    // Clock/reset.
     logic clk;
     logic rst;
     logic rst_n;
 
+    // CPU-side instruction port.
     logic        i_req;
     logic [31:0] i_addr;
     logic        i_busy;
@@ -18,6 +26,7 @@ module tb_ncfx_biu;
     logic [31:0] i_rdata;
     logic        i_err;
 
+    // CPU-side data port.
     logic        d_req;
     logic        d_we;
     logic [1:0]  d_size;
@@ -28,6 +37,7 @@ module tb_ncfx_biu;
     logic [31:0] d_rdata;
     logic        d_err;
 
+    // Fabric-side instruction bus.
     logic        ibus_cyc;
     logic        ibus_stb;
     logic [31:0] ibus_addr;
@@ -35,6 +45,7 @@ module tb_ncfx_biu;
     logic [31:0] ibus_rdata;
     logic        ibus_err;
 
+    // Fabric-side data bus.
     logic        dbus_cyc;
     logic        dbus_stb;
     logic        dbus_we;
@@ -45,12 +56,13 @@ module tb_ncfx_biu;
     logic [31:0] dbus_rdata;
     logic        dbus_err;
 
+    // Scoreboard counters.
     int pass_count;
     int fail_count;
 
     assign rst_n = ~rst;
 
-    ncfx_biu u_biu (
+    biu u_biu (
         .clk        (clk),
         .rst        (rst),
         .i_req      (i_req),
@@ -85,7 +97,7 @@ module tb_ncfx_biu;
         .dbus_err   (dbus_err)
     );
 
-    ncfx_mem u_mem (
+    mem u_mem (
         .clk        (clk),
         .rst_n      (rst_n),
         .ibus_cyc   (ibus_cyc),
@@ -216,8 +228,8 @@ module tb_ncfx_biu;
         fail_count = 0;
 
         if ($test$plusargs("WAVES")) begin
-            $dumpfile("tb_ncfx_biu.vcd");
-            $dumpvars(0, tb_ncfx_biu);
+            $dumpfile("tb_biu.vcd");
+            $dumpvars(0, tb_biu);
         end
 
         repeat (4) @(posedge clk);
@@ -292,7 +304,7 @@ module tb_ncfx_biu;
 
         $display("PASS=%0d FAIL=%0d", pass_count, fail_count);
         if (fail_count != 0) begin
-            $fatal(1, "tb_ncfx_biu failed");
+            $fatal(1, "tb_biu failed");
         end
         $finish;
     end

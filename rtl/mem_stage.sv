@@ -1,16 +1,18 @@
 //
-// ncfx_mem_stage.sv
+// mem_stage.sv
 // NeoCoreFX - MEM (D-port transaction + MEM/WB register)
 //
 
-module ncfx_mem_stage
-  import ncfx_core_pkg::*;
+module mem_stage
+  import core_pkg::*;
 (
+    // Clock/reset and pipeline control.
     input  logic        clk,
     input  logic        rst,
     input  logic        stall_i,
     input  logic        flush_i,
 
+    // EXE -> MEM pipeline inputs.
     input  logic        exe_valid_i,
     input  logic [3:0]  exe_rd_i,
     input  logic [3:0]  exe_store_rs2_addr_i,
@@ -24,22 +26,27 @@ module ncfx_mem_stage
     input  logic        exe_fetch_fault_i,
     input  logic        exe_illegal_i,
 
+    // WB forwarding for store-data hazards.
     input  logic        wb_fwd_valid_i,
     input  logic [3:0]  wb_fwd_rd_i,
     input  logic [31:0] wb_fwd_data_i,
 
+    // BIU D-port response.
     input  logic        d_done_i,
     input  logic [31:0] d_rdata_i,
     input  logic        d_err_i,
 
+    // BIU D-port request.
     output logic        d_req_o,
     output logic        d_we_o,
     output logic [1:0]  d_size_o,
     output logic [31:0] d_addr_o,
     output logic [31:0] d_wdata_o,
 
+    // Pipeline stall request while memory transaction is pending.
     output logic        stall_req_o,
 
+    // MEM -> WB pipeline outputs.
     output logic        memwb_valid_o,
     output logic [3:0]  memwb_rd_o,
     output logic        memwb_reg_write_o,
@@ -83,7 +90,7 @@ module ncfx_mem_stage
         logic [15:0] h;
         begin
             case (size)
-                NCFX_SIZE_BYTE: begin
+                SIZE_BYTE: begin
                     case (addr_lsb)
                         2'b00: b = word_data[31:24];
                         2'b01: b = word_data[23:16];
@@ -97,7 +104,7 @@ module ncfx_mem_stage
                     end
                 end
 
-                NCFX_SIZE_HALF: begin
+                SIZE_HALF: begin
                     case (addr_lsb)
                         2'b00: h = word_data[31:16];
                         default: h = word_data[15:0];
@@ -144,7 +151,7 @@ module ncfx_mem_stage
         end else begin
             xact_valid = 1'b0;
             xact_we = 1'b0;
-            xact_size = NCFX_SIZE_WORD;
+            xact_size = SIZE_WORD;
             xact_addr = 32'h0000_0000;
             xact_store_data = 32'h0000_0000;
         end
@@ -165,7 +172,7 @@ module ncfx_mem_stage
             pend_rd_q            <= 4'h0;
             pend_reg_write_q     <= 1'b0;
             pend_mem_read_q      <= 1'b0;
-            pend_mem_size_q      <= NCFX_SIZE_WORD;
+            pend_mem_size_q      <= SIZE_WORD;
             pend_load_sign_ext_q <= 1'b0;
             pend_addr_q          <= 32'h0000_0000;
             pend_store_data_q    <= 32'h0000_0000;

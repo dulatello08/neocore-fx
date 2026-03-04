@@ -1,8 +1,8 @@
-../rtl/ncfx_core_pkg.sv
-../rtl/ncfx_regfile.sv
-../rtl/ncfx_if1_stage.sv
-../rtl/ncfx_if2_stage.sv
-../rtl/ncfx_id_stage.sv
-../rtl/ncfx_exe_stage.sv
-../rtl/ncfx_mem_stage.sv
-../rtl/ncfx_wb_stage.sv
+../rtl/core_pkg.sv
+../rtl/regfile.sv
+../rtl/if1_stage.sv
+../rtl/if2_stage.sv
+../rtl/id_stage.sv
+../rtl/exe_stage.sv
+../rtl/mem_stage.sv
+../rtl/wb_stage.sv
