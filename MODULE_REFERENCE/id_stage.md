@@ -20,8 +20,10 @@
 
 - `load_use_stall_o`: asserted when a load-use hazard requires stalling.
 - `idex_*`: decoded operands and control for EXE stage.
+- `idex_is_halt_o`: asserted when decode sees `B .` (`off16 == 0` unconditional branch).
 
 ## Notes
 
 - Illegal decode suppresses write/memory/branch side effects.
 - Forwarding selection prioritizes newest valid producer.
+- `B .` is tagged as halt while remaining architecturally an unconditional branch encoding.

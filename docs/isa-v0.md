@@ -245,6 +245,7 @@ Encoding principles already frozen:
 - Meaning: `pc = pc + (sext(off16) << 2)`.
 - Modifiers/notes:
 1. Unconditional relative branch.
+2. `B 0` (assembly form `B .`) is the canonical software halt loop encoding. Hardware may treat this as a retire-time halt event.
 
 #### `BE rs1, rs2, off16`
 - ID: `BR.1`
@@ -550,6 +551,7 @@ Illegal instruction if any condition is met:
 - `NOP` = `0x00000000`
 - `RET` = `0x510F0000` (`JALR 0, 15, 0`)
 - `B 1` = `0x40000001`
+- `B 0` = `0x40000000` (`B .`, canonical halt loop)
 - `BE 1, 2, -4` = `0x41F12FFC`
 
 ## 8) Notes on ISA Identity

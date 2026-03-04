@@ -14,12 +14,14 @@
 - Inputs: `id_*` decoded/control bundle from ID stage.
 - Forward sources: `mem_fwd_data_i`, `wb_fwd_data_i`.
 - Outputs: redirect signals and `mem_*` pipeline bundle.
+- Halt path: `id_is_halt_i` propagates to `mem_is_halt_o`.
 
 ### Main Behaviors
 
 - Forwarding muxes choose source operands from ID, MEM, or WB.
 - ALU supports arithmetic, logic, compare, shifts, and multiply variants.
 - Branch/jump path computes `redirect_valid_o` / `redirect_pc_o` and `mispredict_o`.
+- Halt-tagged instructions do not require a special redirect path and are forwarded to MEM/WB for retirement signaling.
 
 ## Notes
 

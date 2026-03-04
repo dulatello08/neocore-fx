@@ -14,7 +14,7 @@ NeoCoreFX v0 implements a **single-issue, in-order, 6-stage pipeline** targeting
 | **ID** | Instruction Decode | Decode, register file read, immediate extraction, hazard detection |
 | **EXE** | Execute | ALU operation, branch resolution, load/store address computation |
 | **MEM** | Memory Access | D-Bus transaction for loads/stores (BRAM: 1-cycle ack) |
-| **WB** | Writeback | Result written to register file |
+| **WB** | Writeback | Result written to register file, halt retirement detection |
 
 Design principle: each stage boundary is a pipeline register. Every stage has at most one major operation (one BRAM read, one ALU op, one register file access) to keep combinational depth short and frequency high.
 
@@ -68,8 +68,10 @@ Design principle: each stage boundary is a pipeline register. Every stage has at
 - `pc`, `rd`, `rs1_data`, `rs2_data`, `immediate`.
 - `rs1_addr`, `rs2_addr` (needed by EXE-stage forwarding mux).
 - Control signals: `alu_op`, `alu_src` (register vs immediate), `mem_read`, `mem_write`, `mem_size`, `reg_write`, `branch_type`, `is_jump`, `is_lui`, `is_lpc`.
+- Control flags include `is_halt` for the canonical halt alias (`B .`).
 - `predicted_taken` (forwarded).
 - `fetch_fault` (forwarded).
+- `is_halt` (forwarded when decode recognizes `B .`).
 - **Forwarding select signals**: `fwd_rs1_sel`, `fwd_rs2_sel` (see §5.3).
 
 ### 2.4 EXE — Execute
@@ -111,6 +113,7 @@ Design principle: each stage boundary is a pipeline register. Every stage has at
 - `wb_data`: either `exe_result` (for ALU/jump/LUI/LPC instructions) or loaded data from D-Bus (for loads, byte/half extracted and zero/sign-extended by BIU).
 - `rd`, `rd_we`.
 - `mem_fault` (D-Bus returned error).
+- `is_halt` (forwarded).
 
 ### 2.6 WB — Writeback
 
@@ -120,6 +123,15 @@ Design principle: each stage boundary is a pipeline register. Every stage has at
 - If `rd_we` and `rd != 0`: write `wb_data` to register file at address `rd`.
 - If `rd == 0`: write is silently discarded (r0 semantics), but any faults that propagated still occurred.
 - Register file write port is active in this stage.
+- If `is_halt` is set on a valid retiring instruction, assert `halted` to stop frontend/pipeline advancement.
+
+### 2.7 HALT Alias (`B .`)
+
+- Encoding: `B off16` with `off16 = 0`, assembly form `B .`.
+- Decode stage marks this as `is_halt`.
+- The bit is pipelined through EXE and MEM into WB.
+- WB asserts `halted` when the instruction retires without fault/illegal kill.
+- System integration rule: freeze IF/ID/EXE/MEM advancement once `halted` is observed.
 
 ## 3) Branch Prediction — Static BTFNT
 
@@ -293,6 +305,7 @@ Stall sources:
 1. **Load-use dependency** (detected in ID): stalls IF1, IF2, ID. Bubble into EXE.
 2. **D-Bus wait** (MEM waiting for slow ack): stalls IF1, IF2, ID, EXE. Bubble into WB. The entire pipeline freezes.
 3. **Multiply latency** (if multi-cycle): stalls IF1, IF2, ID. Bubble into EXE, while EXE holds until multiply is done.
+4. **Halt retirement** (detected in WB): hold PC and all pipeline registers.
 
 ### 6.2 Flush Signal
 

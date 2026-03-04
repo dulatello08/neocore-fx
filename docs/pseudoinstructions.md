@@ -77,6 +77,13 @@ Pseudoinstructions exist to improve readability and reduce programmer error. The
 - Near case: `JAL 0, off20` (link discarded).
 - Far case: `LUI at, hi16` / `ORI at, at, lo16` / `JALR 0, at, 0`.
 
+### 3.11 `HALT`
+
+- Expansion: `B 0` (assembly equivalent: `B .`).
+- Notes:
+  - Represents a canonical self-branch halt loop in software-visible encoding.
+  - Current RTL exports a `halted` signal when this encoding retires in WB.
+
 ## 4) Assembler Temporary Register (`at`)
 
 - Register `1` is reserved by ABI convention as the **assembler temporary** (`at`).

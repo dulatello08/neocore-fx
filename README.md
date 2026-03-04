@@ -18,6 +18,7 @@ The NeoCore-FX / NeoCore16x32 toolchain is licensed separately under GPL-3.0.
 │   ├── sim.f
 │   ├── sim_biu.f
 │   ├── sim_mem.f
+│   ├── sim_halt.f
 │   ├── sim_pipe.f
 │   └── fpga.f
 ├── rtl/
@@ -38,7 +39,8 @@ The NeoCore-FX / NeoCore16x32 toolchain is licensed separately under GPL-3.0.
 ├── tb/
 │   ├── tb_pkg.sv
 │   ├── tb_biu.sv
-│   └── tb_mem.sv
+│   ├── tb_mem.sv
+│   └── tb_halt_path.sv
 ├── scripts/
 │   └── sim.py
 └── ulx3s-85f-min.lpf
@@ -64,6 +66,18 @@ python3 scripts/sim.py build \
   --build-dir build/sim_mem
 
 python3 scripts/sim.py run --sim build/sim_mem/tb_mem_simv
+```
+
+Run the halt-path pipeline testbench (`B .` -> `halted`):
+
+```bash
+python3 scripts/sim.py build \
+  --filelist filelists/sim_halt.f \
+  --out build/sim_halt/tb_halt_path_simv \
+  --top tb_halt_path \
+  --build-dir build/sim_halt
+
+python3 scripts/sim.py run --sim build/sim_halt/tb_halt_path_simv
 ```
 
 ## FPGA Build (ULX3S 85F)

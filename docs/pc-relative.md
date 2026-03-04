@@ -20,7 +20,7 @@ target_address = pc + (sext(off16) << 2)
 - `off16` is a signed 16-bit word offset extracted from the B16-split encoding.
 - The `<< 2` converts the word offset to a byte offset (since instructions are 4-byte aligned).
 - **Range**: `pc - 131072` to `pc + 131068` (byte addresses), i.e., ±128 KiB relative to the branch instruction.
-- **Self-branch**: `off16 = 0` means `target = pc`, creating an infinite loop. This is a legal encoding.
+- **Self-branch**: `off16 = 0` means `target = pc`, creating an infinite loop. This is a legal encoding and is the canonical `HALT` alias (`B .`) in the current RTL.
 - **Next instruction**: `off16 = 1` means `target = pc + 4`, which is a no-op branch (falls through to next instruction). Legal but pointless for conditional branches.
 
 ### 2.2 `JAL rd, off20`

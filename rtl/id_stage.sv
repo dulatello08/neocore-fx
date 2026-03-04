@@ -1,6 +1,6 @@
 //
 // id_stage.sv
-// NeoCoreFX - ID (decode + hazard detect + ID/EX register)
+// NeoCoreFX - ID (decode + hazard detect + ID/EX register + halt tagging)
 //
 
 module id_stage
@@ -66,6 +66,8 @@ module id_stage
     output logic        idex_is_jalr_o,
     output logic        idex_is_lui_o,
     output logic        idex_is_lpc_o,
+    // Halt metadata for `B .` alias.
+    output logic        idex_is_halt_o,
     output logic        idex_pred_taken_o,
     output logic        idex_fetch_fault_o,
     output logic [1:0]  idex_fwd_rs1_sel_o,
@@ -104,6 +106,7 @@ module id_stage
     logic is_jalr_d;
     logic is_lui_d;
     logic is_lpc_d;
+    logic is_halt_d;
     logic illegal_d;
 
     logic rs1_hazard_d;
@@ -138,6 +141,7 @@ module id_stage
         is_jalr_d = 1'b0;
         is_lui_d = 1'b0;
         is_lpc_d = 1'b0;
+        is_halt_d = 1'b0;
         illegal_d = 1'b0;
 
         if (if2_inst_i != 32'h0000_0000) begin
@@ -286,6 +290,9 @@ module id_stage
                             rs2_used_d = 1'b0;
                             if ((rs1_d != 4'h0) || (rs2_d != 4'h0)) begin
                                 illegal_d = 1'b1;
+                            end else if (imm16_split_d == 16'h0000) begin
+                                // HALT alias: B . (branch to current PC).
+                                is_halt_d = 1'b1;
                             end
                         end
                         4'h1: branch_type_d = BR_EQ;
@@ -330,6 +337,7 @@ module id_stage
             is_jalr_d = 1'b0;
             is_lui_d = 1'b0;
             is_lpc_d = 1'b0;
+            is_halt_d = 1'b0;
         end
 
         rs1_hazard_d = rs1_used_d && (exe_rd_i == rs1_d);
@@ -392,6 +400,7 @@ module id_stage
             idex_is_jalr_o       <= 1'b0;
             idex_is_lui_o        <= 1'b0;
             idex_is_lpc_o        <= 1'b0;
+            idex_is_halt_o       <= 1'b0;
             idex_pred_taken_o    <= 1'b0;
             idex_fetch_fault_o   <= 1'b0;
             idex_fwd_rs1_sel_o   <= FWD_NONE;
@@ -419,6 +428,7 @@ module id_stage
                 idex_is_jalr_o       <= 1'b0;
                 idex_is_lui_o        <= 1'b0;
                 idex_is_lpc_o        <= 1'b0;
+                idex_is_halt_o       <= 1'b0;
                 idex_pred_taken_o    <= 1'b0;
                 idex_fetch_fault_o   <= 1'b0;
                 idex_fwd_rs1_sel_o   <= FWD_NONE;
@@ -445,6 +455,7 @@ module id_stage
                 idex_is_jalr_o       <= is_jalr_d;
                 idex_is_lui_o        <= is_lui_d;
                 idex_is_lpc_o        <= is_lpc_d;
+                idex_is_halt_o       <= is_halt_d;
                 idex_pred_taken_o    <= if2_pred_taken_i;
                 idex_fetch_fault_o   <= if2_fetch_fault_i;
                 idex_fwd_rs1_sel_o   <= fwd_rs1_sel_d;

@@ -12,7 +12,7 @@ This directory contains module-level references for the NeoCoreFX RTL.
 - [id_stage.sv](id_stage.md): Decode, hazard detection, and ID/EX register.
 - [exe_stage.sv](exe_stage.md): Execute, forwarding muxes, and branch redirect logic.
 - [mem_stage.sv](mem_stage.md): Memory transactions, load extraction, and MEM/WB register.
-- [wb_stage.sv](wb_stage.md): Writeback gating and fault kill logic.
+- [wb_stage.sv](wb_stage.md): Writeback gating, fault kill logic, and `halted` assertion.
 
 ## Shared Blocks
 

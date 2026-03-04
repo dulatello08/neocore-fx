@@ -1,6 +1,6 @@
 //
 // mem_stage.sv
-// NeoCoreFX - MEM (D-port transaction + MEM/WB register)
+// NeoCoreFX - MEM (D-port transaction + MEM/WB register + halt propagation)
 //
 
 module mem_stage
@@ -25,6 +25,8 @@ module mem_stage
     input  logic [31:0] exe_store_data_i,
     input  logic        exe_fetch_fault_i,
     input  logic        exe_illegal_i,
+    // Halt metadata from EXE stage.
+    input  logic        exe_is_halt_i,
 
     // WB forwarding for store-data hazards.
     input  logic        wb_fwd_valid_i,
@@ -53,7 +55,9 @@ module mem_stage
     output logic [31:0] memwb_data_o,
     output logic        memwb_mem_fault_o,
     output logic        memwb_fetch_fault_o,
-    output logic        memwb_illegal_o
+    output logic        memwb_illegal_o,
+    // Halt metadata into WB stage.
+    output logic        memwb_is_halt_o
 );
     timeunit 1ns;
     timeprecision 1ps;
@@ -70,6 +74,7 @@ module mem_stage
     logic [31:0] pend_result_q;
     logic        pend_fetch_fault_q;
     logic        pend_illegal_q;
+    logic        pend_is_halt_q;
 
     logic        launch_req;
     logic [31:0] launch_store_data;
@@ -179,6 +184,7 @@ module mem_stage
             pend_result_q        <= 32'h0000_0000;
             pend_fetch_fault_q   <= 1'b0;
             pend_illegal_q       <= 1'b0;
+            pend_is_halt_q       <= 1'b0;
 
             memwb_valid_o        <= 1'b0;
             memwb_rd_o           <= 4'h0;
@@ -187,9 +193,11 @@ module mem_stage
             memwb_mem_fault_o    <= 1'b0;
             memwb_fetch_fault_o  <= 1'b0;
             memwb_illegal_o      <= 1'b0;
+            memwb_is_halt_o      <= 1'b0;
         end else if (flush_i) begin
             pending_q            <= 1'b0;
             pend_valid_q         <= 1'b0;
+            pend_is_halt_q       <= 1'b0;
 
             memwb_valid_o        <= 1'b0;
             memwb_rd_o           <= 4'h0;
@@ -198,11 +206,13 @@ module mem_stage
             memwb_mem_fault_o    <= 1'b0;
             memwb_fetch_fault_o  <= 1'b0;
             memwb_illegal_o      <= 1'b0;
+            memwb_is_halt_o      <= 1'b0;
         end else begin
             memwb_valid_o       <= 1'b0;
             memwb_mem_fault_o   <= 1'b0;
             memwb_fetch_fault_o <= 1'b0;
             memwb_illegal_o     <= 1'b0;
+            memwb_is_halt_o     <= 1'b0;
 
             if (pending_q) begin
                 if (d_done_i) begin
@@ -218,6 +228,7 @@ module mem_stage
                     memwb_mem_fault_o    <= d_err_i;
                     memwb_fetch_fault_o  <= pend_fetch_fault_q;
                     memwb_illegal_o      <= pend_illegal_q;
+                    memwb_is_halt_o      <= pend_is_halt_q;
                 end
             end else if (launch_req) begin
                 if (d_done_i) begin
@@ -232,6 +243,7 @@ module mem_stage
                     memwb_mem_fault_o    <= d_err_i;
                     memwb_fetch_fault_o  <= exe_fetch_fault_i;
                     memwb_illegal_o      <= exe_illegal_i;
+                    memwb_is_halt_o      <= exe_is_halt_i;
                 end else begin
                     pending_q            <= 1'b1;
                     pend_valid_q         <= exe_valid_i;
@@ -245,6 +257,7 @@ module mem_stage
                     pend_result_q        <= exe_result_i;
                     pend_fetch_fault_q   <= exe_fetch_fault_i;
                     pend_illegal_q       <= exe_illegal_i;
+                    pend_is_halt_q       <= exe_is_halt_i;
                 end
             end else if (!stall_i) begin
                 memwb_valid_o       <= exe_valid_i;
@@ -254,6 +267,7 @@ module mem_stage
                 memwb_mem_fault_o   <= 1'b0;
                 memwb_fetch_fault_o <= exe_fetch_fault_i;
                 memwb_illegal_o     <= exe_illegal_i;
+                memwb_is_halt_o     <= exe_is_halt_i;
             end
         end
     end

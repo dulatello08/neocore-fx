@@ -1,6 +1,6 @@
 //
 // exe_stage.sv
-// NeoCoreFX - EXE (forward mux + ALU + branch/jump resolution)
+// NeoCoreFX - EXE (forward mux + ALU + branch/jump resolution + halt propagation)
 //
 
 module exe_stage
@@ -33,6 +33,8 @@ module exe_stage
     input  logic        id_is_jalr_i,
     input  logic        id_is_lui_i,
     input  logic        id_is_lpc_i,
+    // Halt metadata from decode (`B .` alias).
+    input  logic        id_is_halt_i,
     input  logic        id_pred_taken_i,
     input  logic        id_fetch_fault_i,
     input  logic        id_illegal_i,
@@ -60,7 +62,9 @@ module exe_stage
     output logic [31:0] mem_result_o,
     output logic [31:0] mem_store_data_o,
     output logic        mem_fetch_fault_o,
-    output logic        mem_illegal_o
+    output logic        mem_illegal_o,
+    // Halt metadata toward MEM stage.
+    output logic        mem_is_halt_o
 );
     timeunit 1ns;
     timeprecision 1ps;
@@ -208,6 +212,7 @@ module exe_stage
             mem_store_data_o     <= 32'h0000_0000;
             mem_fetch_fault_o    <= 1'b0;
             mem_illegal_o        <= 1'b0;
+            mem_is_halt_o        <= 1'b0;
         end else if (flush_i) begin
             mem_valid_o          <= 1'b0;
             mem_rd_o             <= 4'h0;
@@ -221,6 +226,7 @@ module exe_stage
             mem_store_data_o     <= 32'h0000_0000;
             mem_fetch_fault_o    <= 1'b0;
             mem_illegal_o        <= 1'b0;
+            mem_is_halt_o        <= 1'b0;
         end else if (!stall_i) begin
             mem_valid_o          <= id_valid_i;
             mem_rd_o             <= id_rd_i;
@@ -234,6 +240,7 @@ module exe_stage
             mem_store_data_o     <= rs2_final;
             mem_fetch_fault_o    <= id_fetch_fault_i;
             mem_illegal_o        <= id_illegal_i;
+            mem_is_halt_o        <= id_valid_i && id_is_halt_i && !id_illegal_i;
         end
     end
 endmodule

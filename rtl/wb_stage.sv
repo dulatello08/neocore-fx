@@ -1,6 +1,6 @@
 //
 // wb_stage.sv
-// NeoCoreFX - WB (register write control)
+// NeoCoreFX - WB (register write control + halt retire signal)
 //
 
 module wb_stage (
@@ -12,6 +12,8 @@ module wb_stage (
     input  logic        memwb_mem_fault_i,
     input  logic        memwb_fetch_fault_i,
     input  logic        memwb_illegal_i,
+    // Halt metadata from MEM stage.
+    input  logic        memwb_is_halt_i,
 
     // Register file write port.
     output logic        rf_we_o,
@@ -20,7 +22,9 @@ module wb_stage (
 
     // Writeback status outputs.
     output logic        wb_valid_o,
-    output logic        wb_fault_o
+    output logic        wb_fault_o,
+    // Halted pulse when halt retires cleanly.
+    output logic        halted_o
 );
     timeunit 1ns;
     timeprecision 1ps;
@@ -36,5 +40,6 @@ module wb_stage (
 
         wb_valid_o = memwb_valid_i;
         wb_fault_o = memwb_valid_i && kill_write;
+        halted_o = memwb_valid_i && memwb_is_halt_i && !kill_write;
     end
 endmodule
