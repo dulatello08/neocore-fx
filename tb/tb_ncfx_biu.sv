@@ -8,6 +8,7 @@ module tb_ncfx_biu;
     localparam logic [1:0] SIZE_WORD = 2'b10;
 
     logic clk;
+    logic rst;
     logic rst_n;
 
     logic        i_req;
@@ -47,39 +48,41 @@ module tb_ncfx_biu;
     int pass_count;
     int fail_count;
 
+    assign rst_n = ~rst;
+
     ncfx_biu u_biu (
-        .clk       (clk),
-        .rst_n     (rst_n),
-        .i_req     (i_req),
-        .i_addr    (i_addr),
-        .i_busy    (i_busy),
-        .i_done    (i_done),
-        .i_rdata   (i_rdata),
-        .i_err     (i_err),
-        .d_req     (d_req),
-        .d_we      (d_we),
-        .d_size    (d_size),
-        .d_addr    (d_addr),
-        .d_wdata   (d_wdata),
-        .d_busy    (d_busy),
-        .d_done    (d_done),
-        .d_rdata   (d_rdata),
-        .d_err     (d_err),
-        .ibus_cyc  (ibus_cyc),
-        .ibus_stb  (ibus_stb),
-        .ibus_addr (ibus_addr),
-        .ibus_ack  (ibus_ack),
-        .ibus_rdata(ibus_rdata),
-        .ibus_err  (ibus_err),
-        .dbus_cyc  (dbus_cyc),
-        .dbus_stb  (dbus_stb),
-        .dbus_we   (dbus_we),
-        .dbus_addr (dbus_addr),
-        .dbus_wdata(dbus_wdata),
-        .dbus_sel  (dbus_sel),
-        .dbus_ack  (dbus_ack),
-        .dbus_rdata(dbus_rdata),
-        .dbus_err  (dbus_err)
+        .clk        (clk),
+        .rst        (rst),
+        .i_req      (i_req),
+        .i_addr     (i_addr),
+        .i_busy     (i_busy),
+        .i_done     (i_done),
+        .i_rdata    (i_rdata),
+        .i_err      (i_err),
+        .d_req      (d_req),
+        .d_we       (d_we),
+        .d_size     (d_size),
+        .d_addr     (d_addr),
+        .d_wdata    (d_wdata),
+        .d_busy     (d_busy),
+        .d_done     (d_done),
+        .d_rdata    (d_rdata),
+        .d_err      (d_err),
+        .ibus_cyc   (ibus_cyc),
+        .ibus_stb   (ibus_stb),
+        .ibus_addr  (ibus_addr),
+        .ibus_ack   (ibus_ack),
+        .ibus_rdata (ibus_rdata),
+        .ibus_err   (ibus_err),
+        .dbus_cyc   (dbus_cyc),
+        .dbus_stb   (dbus_stb),
+        .dbus_we    (dbus_we),
+        .dbus_addr  (dbus_addr),
+        .dbus_wdata (dbus_wdata),
+        .dbus_sel   (dbus_sel),
+        .dbus_ack   (dbus_ack),
+        .dbus_rdata (dbus_rdata),
+        .dbus_err   (dbus_err)
     );
 
     ncfx_mem u_mem (
@@ -134,13 +137,8 @@ module tb_ncfx_biu;
         begin
             i_req  <= 1'b1;
             i_addr <= addr;
-            @(posedge clk);
-            i_req  <= 1'b0;
-            i_addr <= 32'h0000_0000;
-
             timeout = 0;
-            #1;
-            got_done = i_done;
+            got_done = 1'b0;
             while (!got_done && timeout < 40) begin
                 @(posedge clk);
                 #1;
@@ -152,6 +150,10 @@ module tb_ncfx_biu;
             check_true(got_done, "I request completed");
             rdata = i_rdata;
             err_seen = i_err;
+
+            i_req  <= 1'b0;
+            i_addr <= 32'h0000_0000;
+            @(posedge clk);
         end
     endtask
 
@@ -171,16 +173,8 @@ module tb_ncfx_biu;
             d_size  <= size;
             d_addr  <= addr;
             d_wdata <= wdata;
-            @(posedge clk);
-            d_req   <= 1'b0;
-            d_we    <= 1'b0;
-            d_size  <= SIZE_WORD;
-            d_addr  <= 32'h0000_0000;
-            d_wdata <= 32'h0000_0000;
-
             timeout = 0;
-            #1;
-            got_done = d_done;
+            got_done = 1'b0;
             while (!got_done && timeout < 40) begin
                 @(posedge clk);
                 #1;
@@ -192,6 +186,13 @@ module tb_ncfx_biu;
             check_true(got_done, "D request completed");
             rdata = d_rdata;
             err_seen = d_err;
+
+            d_req   <= 1'b0;
+            d_we    <= 1'b0;
+            d_size  <= SIZE_WORD;
+            d_addr  <= 32'h0000_0000;
+            d_wdata <= 32'h0000_0000;
+            @(posedge clk);
         end
     endtask
 
@@ -201,7 +202,7 @@ module tb_ncfx_biu;
         int          timeout;
 
         clk = 1'b0;
-        rst_n = 1'b0;
+        rst = 1'b1;
 
         i_req = 1'b0;
         i_addr = 32'h0;
@@ -220,7 +221,7 @@ module tb_ncfx_biu;
         end
 
         repeat (4) @(posedge clk);
-        rst_n <= 1'b1;
+        rst <= 1'b0;
         @(posedge clk);
         #1;
 
@@ -267,18 +268,11 @@ module tb_ncfx_biu;
         d_size  <= SIZE_WORD;
         d_addr  <= 32'h0000_0010;
         d_wdata <= 32'h0;
-        @(posedge clk);
-        i_req   <= 1'b0;
-        i_addr  <= 32'h0;
-        d_req   <= 1'b0;
-        d_we    <= 1'b0;
-        d_size  <= SIZE_WORD;
-        d_addr  <= 32'h0;
-        d_wdata <= 32'h0;
 
         timeout = 0;
         while ((!i_done || !d_done) && timeout < 40) begin
             @(posedge clk);
+            #1;
             timeout = timeout + 1;
         end
         #1;
@@ -286,6 +280,15 @@ module tb_ncfx_biu;
         check_true(!i_err && !d_err, "Concurrent I/D requests are error free");
         check_eq32(i_rdata, 32'h11AA_BEEF, "Concurrent I read data");
         check_eq32(d_rdata, 32'h11AA_BEEF, "Concurrent D read data");
+
+        i_req   <= 1'b0;
+        i_addr  <= 32'h0;
+        d_req   <= 1'b0;
+        d_we    <= 1'b0;
+        d_size  <= SIZE_WORD;
+        d_addr  <= 32'h0;
+        d_wdata <= 32'h0;
+        @(posedge clk);
 
         $display("PASS=%0d FAIL=%0d", pass_count, fail_count);
         if (fail_count != 0) begin

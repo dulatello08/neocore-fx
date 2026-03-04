@@ -1,6 +1,11 @@
+//
+// ncfx_biu.sv
+// NeoCoreFX - Bus Interface Unit (combinational bridge)
+//
+
 module ncfx_biu (
     input  logic        clk,
-    input  logic        rst_n,
+    input  logic        rst,
 
     // CPU I-Port: 32-bit read-only fetch
     input  logic        i_req,
@@ -47,9 +52,14 @@ module ncfx_biu (
     localparam logic [1:0] NCFX_SIZE_HALF = 2'b01;
     localparam logic [1:0] NCFX_SIZE_WORD = 2'b10;
 
-    logic [1:0] d_size_q;
-    logic [1:0] d_addr_lsb_q;
-    logic       d_we_q;
+    logic i_aligned;
+    logic i_req_valid;
+    logic i_rsp_done;
+
+    logic d_size_ok;
+    logic d_aligned;
+    logic d_req_valid;
+    logic d_rsp_done;
 
     function automatic logic d_size_valid(input logic [1:0] size);
         return (size == NCFX_SIZE_BYTE) || (size == NCFX_SIZE_HALF) || (size == NCFX_SIZE_WORD);
@@ -138,95 +148,36 @@ module ncfx_biu (
         endcase
     endfunction
 
-    always_ff @(posedge clk or negedge rst_n) begin
-        if (!rst_n) begin
-            i_busy   <= 1'b0;
-            i_done   <= 1'b0;
-            i_rdata  <= 32'h0000_0000;
-            i_err    <= 1'b0;
-            ibus_cyc <= 1'b0;
-            ibus_stb <= 1'b0;
-            ibus_addr <= 32'h0000_0000;
-        end else begin
-            i_done <= 1'b0;
-            i_err  <= 1'b0;
+    assign i_aligned = (i_addr[1:0] == 2'b00);
+    assign i_req_valid = i_req && i_aligned;
+    assign i_rsp_done = ibus_ack || ibus_err;
 
-            if (!i_busy) begin
-                if (i_req) begin
-                    if (i_addr[1:0] != 2'b00) begin
-                        i_done <= 1'b1;
-                        i_err  <= 1'b1;
-                    end else begin
-                        i_busy    <= 1'b1;
-                        ibus_cyc  <= 1'b1;
-                        ibus_stb  <= 1'b1;
-                        ibus_addr <= i_addr;
-                    end
-                end
-            end else begin
-                if (ibus_ack || ibus_err) begin
-                    i_busy   <= 1'b0;
-                    i_done   <= 1'b1;
-                    i_err    <= ibus_err;
-                    i_rdata  <= ibus_rdata;
-                    ibus_cyc <= 1'b0;
-                    ibus_stb <= 1'b0;
-                end
-            end
-        end
-    end
+    assign d_size_ok = d_size_valid(d_size);
+    assign d_aligned = d_is_aligned(d_size, d_addr[1:0]);
+    assign d_req_valid = d_req && d_size_ok && d_aligned;
+    assign d_rsp_done = dbus_ack || dbus_err;
 
-    always_ff @(posedge clk or negedge rst_n) begin
-        if (!rst_n) begin
-            d_busy    <= 1'b0;
-            d_done    <= 1'b0;
-            d_rdata   <= 32'h0000_0000;
-            d_err     <= 1'b0;
-            d_size_q  <= NCFX_SIZE_WORD;
-            d_addr_lsb_q <= 2'b00;
-            d_we_q    <= 1'b0;
-            dbus_cyc  <= 1'b0;
-            dbus_stb  <= 1'b0;
-            dbus_we   <= 1'b0;
-            dbus_addr <= 32'h0000_0000;
-            dbus_wdata <= 32'h0000_0000;
-            dbus_sel  <= 4'b0000;
-        end else begin
-            d_done <= 1'b0;
-            d_err  <= 1'b0;
+    assign ibus_cyc = i_req_valid;
+    assign ibus_stb = i_req_valid;
+    assign ibus_addr = i_addr;
 
-            if (!d_busy) begin
-                if (d_req) begin
-                    if (!d_size_valid(d_size) || !d_is_aligned(d_size, d_addr[1:0])) begin
-                        d_done <= 1'b1;
-                        d_err  <= 1'b1;
-                    end else begin
-                        d_busy       <= 1'b1;
-                        d_size_q     <= d_size;
-                        d_addr_lsb_q <= d_addr[1:0];
-                        d_we_q       <= d_we;
-                        dbus_cyc     <= 1'b1;
-                        dbus_stb     <= 1'b1;
-                        dbus_we      <= d_we;
-                        dbus_addr    <= d_addr;
-                        dbus_sel     <= d_gen_sel(d_size, d_addr[1:0]);
-                        dbus_wdata   <= d_gen_wdata(d_size, d_addr[1:0], d_wdata);
-                    end
-                end
-            end else begin
-                if (dbus_ack || dbus_err) begin
-                    d_busy    <= 1'b0;
-                    d_done    <= 1'b1;
-                    d_err     <= dbus_err;
-                    dbus_cyc  <= 1'b0;
-                    dbus_stb  <= 1'b0;
-                    dbus_we   <= 1'b0;
+    assign i_busy = i_req_valid && !i_rsp_done;
+    assign i_done = i_req && (!i_aligned || i_rsp_done);
+    assign i_err = i_req && (!i_aligned || (i_req_valid && ibus_err));
+    assign i_rdata = ibus_rdata;
 
-                    if (dbus_ack && !d_we_q) begin
-                        d_rdata <= d_extract_rdata(dbus_rdata, d_size_q, d_addr_lsb_q);
-                    end
-                end
-            end
-        end
-    end
+    assign dbus_cyc = d_req_valid;
+    assign dbus_stb = d_req_valid;
+    assign dbus_we = d_req_valid && d_we;
+    assign dbus_addr = d_addr;
+    assign dbus_wdata = d_gen_wdata(d_size, d_addr[1:0], d_wdata);
+    assign dbus_sel = d_req_valid ? d_gen_sel(d_size, d_addr[1:0]) : 4'b0000;
+
+    assign d_busy = d_req_valid && !d_rsp_done;
+    assign d_done = d_req && (!d_size_ok || !d_aligned || d_rsp_done);
+    assign d_err = d_req && ((!d_size_ok || !d_aligned) || (d_req_valid && dbus_err));
+    assign d_rdata = d_extract_rdata(dbus_rdata, d_size, d_addr[1:0]);
+
+    logic unused_clk_rst;
+    assign unused_clk_rst = clk ^ rst;
 endmodule
