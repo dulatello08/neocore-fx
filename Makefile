@@ -13,10 +13,21 @@ FPGA_BUILD_DIR ?= $(BUILD_ROOT)/fpga
 WAVE_DIR ?= $(BUILD_ROOT)/waves
 
 SIM_FILELIST ?= filelists/sim.f
-SIM_TOP ?= tb_biu
+SIM_TOP ?= tb_core_smoke
 SIM_BIN ?= $(SIM_BUILD_DIR)/simv
 IVERILOG_FLAGS ?= -g2012 -Wall -Winfloop
 VVP_ARGS ?=
+
+CORE_SMOKE_FILELIST ?= filelists/sim_core_smoke.f
+CORE_SMOKE_TOP ?= tb_core_smoke
+CORE_SMOKE_BUILD_DIR ?= $(BUILD_ROOT)/sim_core_smoke
+CORE_SMOKE_BIN ?= $(CORE_SMOKE_BUILD_DIR)/tb_core_smoke_simv
+
+CORE_ANY_FILELIST ?= filelists/sim_core_any.f
+CORE_ANY_TOP ?= tb_core_any
+CORE_ANY_BUILD_DIR ?= $(BUILD_ROOT)/sim_core_any
+CORE_ANY_BIN ?= $(CORE_ANY_BUILD_DIR)/tb_core_any_simv
+PROGRAM ?= mem/test_smoke.hex
 
 FPGA_FILELIST ?= filelists/fpga.f
 FPGA_TOP ?= neocorefx_fpga_top
@@ -43,13 +54,21 @@ define note
 	@printf "$(CLR_CYAN)[neo]$(CLR_RESET) %s\n" "$(1)"
 endef
 
-.PHONY: help check-sim check-fpga dirs build run waves list fpga fpga-list clean clobber
+.PHONY: help check-sim check-fpga dirs build run waves list \
+	core-smoke-build core-smoke-run core-any-build core-any-run \
+	run_smoke run_any profile_any debug_any waves_any \
+	fpga fpga-list clean clobber
 
 help:
 	@printf "$(CLR_BOLD)$(CLR_BLUE)NeoCoreFX Build Targets$(CLR_RESET)\n"
 	@printf "  $(CLR_GREEN)make build$(CLR_RESET)      Compile simulation binary (iverilog)\n"
 	@printf "  $(CLR_GREEN)make run$(CLR_RESET)        Build + run simulation (vvp)\n"
 	@printf "  $(CLR_GREEN)make waves$(CLR_RESET)      Build + run with +WAVES (VCD)\n"
+	@printf "  $(CLR_GREEN)make run_smoke$(CLR_RESET)  Build + run integrated core smoke TB\n"
+	@printf "  $(CLR_GREEN)make run_any$(CLR_RESET)    Run generic TB with PROGRAM=<byte-hex>\n"
+	@printf "  $(CLR_GREEN)make profile_any$(CLR_RESET) Run generic TB with +PROFILE stats\n"
+	@printf "  $(CLR_GREEN)make debug_any$(CLR_RESET)  Run generic TB with +DEBUG trace\n"
+	@printf "  $(CLR_GREEN)make waves_any$(CLR_RESET)  Run generic TB with +WAVES dump\n"
 	@printf "  $(CLR_GREEN)make list$(CLR_RESET)       Show resolved simulation source order\n"
 	@printf "  $(CLR_GREEN)make fpga$(CLR_RESET)       Build FPGA bitstream (yosys/nextpnr/ecppack)\n"
 	@printf "  $(CLR_GREEN)make fpga-list$(CLR_RESET)  Show resolved FPGA source order\n"
@@ -58,6 +77,7 @@ help:
 	@printf "\n$(CLR_BOLD)Key Variables$(CLR_RESET)\n"
 	@printf "  SIM_TOP=$(SIM_TOP)\n"
 	@printf "  SIM_FILELIST=$(SIM_FILELIST)\n"
+	@printf "  PROGRAM=$(PROGRAM)\n"
 	@printf "  FPGA_TOP=$(FPGA_TOP)\n"
 	@printf "  FPGA_FILELIST=$(FPGA_FILELIST)\n"
 	@printf "  LPF=$(LPF)\n"
@@ -108,6 +128,84 @@ list: check-sim
 	$(call banner,SIM SOURCE LIST)
 	@$(PYTHON) $(SIM_HELPER) list \
 		--filelist $(SIM_FILELIST)
+
+core-smoke-build: check-sim
+	$(call banner,CORE SMOKE BUILD)
+	@mkdir -p $(CORE_SMOKE_BUILD_DIR)
+	@$(PYTHON) $(SIM_HELPER) build \
+		--filelist $(CORE_SMOKE_FILELIST) \
+		--out $(CORE_SMOKE_BIN) \
+		--top $(CORE_SMOKE_TOP) \
+		--iverilog $(IVERILOG) \
+		--flags "$(IVERILOG_FLAGS)" \
+		--build-dir $(CORE_SMOKE_BUILD_DIR)
+
+core-smoke-run: core-smoke-build
+	$(call banner,CORE SMOKE RUN)
+	@$(PYTHON) $(SIM_HELPER) run \
+		--sim $(CORE_SMOKE_BIN) \
+		--vvp $(VVP) \
+		--vvp-args "$(VVP_ARGS)"
+
+run_smoke: core-smoke-run
+
+core-any-build: check-sim
+	$(call banner,CORE ANY BUILD)
+	@mkdir -p $(CORE_ANY_BUILD_DIR)
+	@$(PYTHON) $(SIM_HELPER) build \
+		--filelist $(CORE_ANY_FILELIST) \
+		--out $(CORE_ANY_BIN) \
+		--top $(CORE_ANY_TOP) \
+		--iverilog $(IVERILOG) \
+		--flags "$(IVERILOG_FLAGS)" \
+		--build-dir $(CORE_ANY_BUILD_DIR)
+
+core-any-run: core-any-build
+	$(call banner,CORE ANY RUN)
+	@if [ ! -f "$(PROGRAM)" ]; then \
+		echo "ERROR: Program file '$(PROGRAM)' not found."; \
+		exit 1; \
+	fi
+	@$(PYTHON) $(SIM_HELPER) run \
+		--sim $(CORE_ANY_BIN) \
+		--vvp $(VVP) \
+		--vvp-args "+PROGRAM=$(PROGRAM) $(VVP_ARGS)"
+
+run_any: core-any-run
+
+profile_any: core-any-build
+	$(call banner,CORE ANY PROFILE)
+	@if [ ! -f "$(PROGRAM)" ]; then \
+		echo "ERROR: Program file '$(PROGRAM)' not found."; \
+		exit 1; \
+	fi
+	@$(PYTHON) $(SIM_HELPER) run \
+		--sim $(CORE_ANY_BIN) \
+		--vvp $(VVP) \
+		--vvp-args "+PROGRAM=$(PROGRAM) +PROFILE $(VVP_ARGS)"
+
+debug_any: core-any-build
+	$(call banner,CORE ANY DEBUG)
+	@if [ ! -f "$(PROGRAM)" ]; then \
+		echo "ERROR: Program file '$(PROGRAM)' not found."; \
+		exit 1; \
+	fi
+	@$(PYTHON) $(SIM_HELPER) run \
+		--sim $(CORE_ANY_BIN) \
+		--vvp $(VVP) \
+		--vvp-args "+PROGRAM=$(PROGRAM) +DEBUG $(VVP_ARGS)"
+
+waves_any: core-any-build
+	$(call banner,CORE ANY WAVES)
+	@if [ ! -f "$(PROGRAM)" ]; then \
+		echo "ERROR: Program file '$(PROGRAM)' not found."; \
+		exit 1; \
+	fi
+	@$(PYTHON) $(SIM_HELPER) run \
+		--sim $(CORE_ANY_BIN) \
+		--vvp $(VVP) \
+		--vvp-args "+PROGRAM=$(PROGRAM) $(VVP_ARGS)" \
+		--plusarg WAVES
 
 fpga: check-fpga dirs
 	$(call banner,FPGA BUILD)
