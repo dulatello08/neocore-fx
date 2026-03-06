@@ -1,2 +1,2 @@
-# Default simulation target: BIU + memory integration testbench.
--f sim_biu.f
+# Default simulation target: integrated core smoke testbench.
+-f sim_core_smoke.f

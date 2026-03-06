@@ -11,4 +11,3 @@
 ../rtl/mem.sv
 ../rtl/neocorefx_core.sv
 ../rtl/neocorefx_top.sv
-../rtl/neocorefx_fpga_top.sv
