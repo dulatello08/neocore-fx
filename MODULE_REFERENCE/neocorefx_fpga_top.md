@@ -1,11 +1,11 @@
 # neocorefx_fpga_top.sv - FPGA Board Wrapper
 
 > [!TIP]
-> Module Index: [README.md](README.md)
+> Module Index: [README.md](README.md) | Docs Home: [../README.md](../README.md)
 
 ## Overview
 
-`neocorefx_fpga_top` binds `neocorefx_top` to board IO for the ULX3S-style top-level interface.
+`neocorefx_fpga_top` binds `neocorefx_top` to ULX3S-facing clock/button/LED IO.
 
 ## Module: `neocorefx_fpga_top`
 
@@ -14,11 +14,25 @@
 | Port | Direction | Width | Description |
 |------|-----------|-------|-------------|
 | `clk_25mhz` | input | 1 | Board clock |
-| `btn` | input | 7 | Button input vector (`btn[0]` reset source) |
-| `led` | output | 8 | LED output vector |
+| `btn` | input | 7 | Button vector (`btn[0]` reset source) |
+| `led` | output | 8 | LED status outputs |
 
-## Internal Behavior
+## LED Map
 
-- Instantiates `neocorefx_top`.
-- Drives `en=1'b1`.
-- Mirrors `count` to `led`.
+- `led[7]`: reset asserted
+- `led[6]`: heartbeat toggle
+- `led[5]`: halted
+- `led[4]`: WB fault
+- `led[3:2]`: PC activity bits
+- `led[1]`: memory stall activity
+- `led[0]`: load-use stall activity
+
+## Notes
+
+- `neocorefx_top` is run with `en=1'b1` in this wrapper.
+- The LED map prioritizes bring-up observability over ABI semantics.
+
+## Related Modules
+
+- [neocorefx_top.md](neocorefx_top.md)
+- `neocorefx_core.sv`
