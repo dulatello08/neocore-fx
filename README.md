@@ -16,11 +16,18 @@ The NeoCore-FX / NeoCore16x32 toolchain is licensed separately under GPL-3.0.
 ├── docs/
 ├── filelists/
 │   ├── sim.f
+│   ├── sim_core.f
+│   ├── sim_core_smoke.f
+│   ├── sim_core_any.f
 │   ├── sim_biu.f
 │   ├── sim_mem.f
 │   ├── sim_halt.f
 │   ├── sim_pipe.f
 │   └── fpga.f
+├── mem/
+│   ├── test_smoke.hex
+│   ├── test_halt.hex
+│   └── README.md
 ├── rtl/
 │   ├── core_pkg.sv
 │   ├── mem_pkg.sv
@@ -33,27 +40,49 @@ The NeoCore-FX / NeoCore16x32 toolchain is licensed separately under GPL-3.0.
 │   ├── wb_stage.sv
 │   ├── biu.sv
 │   ├── mem.sv
-│   ├── counter.sv
+│   ├── neocorefx_core.sv
 │   ├── neocorefx_top.sv
 │   └── neocorefx_fpga_top.sv
 ├── tb/
 │   ├── tb_pkg.sv
+│   ├── tb_core_smoke.sv
+│   ├── tb_core_any.sv
 │   ├── tb_biu.sv
 │   ├── tb_mem.sv
-│   └── tb_halt_path.sv
+│   ├── tb_halt_path.sv
+│   └── README.md
 ├── scripts/
-│   └── sim.py
+│   ├── sim.py
+│   ├── run_any.py
+│   ├── bin2hex.py
+│   └── wordhex_to_bytehex.py
 └── ulx3s-85f-min.lpf
 ```
 
 ## Simulation
 
-Default simulation target is `tb_biu` via `filelists/sim.f`.
+Default simulation target is the integrated core smoke testbench (`tb_core_smoke`) via `filelists/sim.f`.
 
 ```bash
 make run
 make waves
 make list
+```
+
+Integrated core workflows:
+
+```bash
+make run_smoke
+make run_any PROGRAM=mem/test_smoke.hex
+make profile_any PROGRAM=mem/test_smoke.hex
+make debug_any PROGRAM=mem/test_smoke.hex
+make waves_any PROGRAM=mem/test_smoke.hex
+```
+
+One-command generic loader helper:
+
+```bash
+python3 scripts/run_any.py --program mem/test_smoke.hex --profile
 ```
 
 Run the memory-only testbench:
@@ -78,6 +107,13 @@ python3 scripts/sim.py build \
   --build-dir build/sim_halt
 
 python3 scripts/sim.py run --sim build/sim_halt/tb_halt_path_simv
+```
+
+Program format conversion helpers:
+
+```bash
+python3 scripts/bin2hex.py input.bin mem/input.hex
+python3 scripts/wordhex_to_bytehex.py input_words.hex mem/input.hex
 ```
 
 ## FPGA Build (ULX3S 85F)
