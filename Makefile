@@ -28,6 +28,9 @@ CORE_ANY_TOP ?= tb_core_any
 CORE_ANY_BUILD_DIR ?= $(BUILD_ROOT)/sim_core_any
 CORE_ANY_BIN ?= $(CORE_ANY_BUILD_DIR)/tb_core_any_simv
 PROGRAM ?= mem/test_smoke.hex
+BIN_INPUT ?=
+WORDHEX_INPUT ?=
+HEX_OUTPUT ?= mem/output.hex
 
 FPGA_FILELIST ?= filelists/fpga.f
 FPGA_TOP ?= neocorefx_fpga_top
@@ -57,6 +60,7 @@ endef
 .PHONY: help check-sim check-fpga dirs build run waves list \
 	core-smoke-build core-smoke-run core-any-build core-any-run \
 	run_smoke run_any profile_any debug_any waves_any \
+	smoke-hex bin2hex wordhex2byte \
 	fpga fpga-list clean clobber
 
 help:
@@ -69,6 +73,9 @@ help:
 	@printf "  $(CLR_GREEN)make profile_any$(CLR_RESET) Run generic TB with +PROFILE stats\n"
 	@printf "  $(CLR_GREEN)make debug_any$(CLR_RESET)  Run generic TB with +DEBUG trace\n"
 	@printf "  $(CLR_GREEN)make waves_any$(CLR_RESET)  Run generic TB with +WAVES dump\n"
+	@printf "  $(CLR_GREEN)make smoke-hex$(CLR_RESET)  Regenerate mem/test_smoke.hex\n"
+	@printf "  $(CLR_GREEN)make bin2hex$(CLR_RESET)    BIN_INPUT=<bin> HEX_OUTPUT=<hex>\n"
+	@printf "  $(CLR_GREEN)make wordhex2byte$(CLR_RESET) WORDHEX_INPUT=<wordhex> HEX_OUTPUT=<hex>\n"
 	@printf "  $(CLR_GREEN)make list$(CLR_RESET)       Show resolved simulation source order\n"
 	@printf "  $(CLR_GREEN)make fpga$(CLR_RESET)       Build FPGA bitstream (yosys/nextpnr/ecppack)\n"
 	@printf "  $(CLR_GREEN)make fpga-list$(CLR_RESET)  Show resolved FPGA source order\n"
@@ -78,6 +85,9 @@ help:
 	@printf "  SIM_TOP=$(SIM_TOP)\n"
 	@printf "  SIM_FILELIST=$(SIM_FILELIST)\n"
 	@printf "  PROGRAM=$(PROGRAM)\n"
+	@printf "  BIN_INPUT=$(BIN_INPUT)\n"
+	@printf "  WORDHEX_INPUT=$(WORDHEX_INPUT)\n"
+	@printf "  HEX_OUTPUT=$(HEX_OUTPUT)\n"
 	@printf "  FPGA_TOP=$(FPGA_TOP)\n"
 	@printf "  FPGA_FILELIST=$(FPGA_FILELIST)\n"
 	@printf "  LPF=$(LPF)\n"
@@ -206,6 +216,28 @@ waves_any: core-any-build
 		--vvp $(VVP) \
 		--vvp-args "+PROGRAM=$(PROGRAM) $(VVP_ARGS)" \
 		--plusarg WAVES
+
+smoke-hex:
+	$(call banner,SMOKE HEX)
+	@$(PYTHON) scripts/make_smoke_hex.py --out mem/test_smoke.hex
+
+bin2hex:
+	$(call banner,BINARY TO HEX)
+	@if [ -z "$(BIN_INPUT)" ]; then \
+		echo "ERROR: BIN_INPUT is required."; \
+		echo "Usage: make bin2hex BIN_INPUT=input.bin HEX_OUTPUT=mem/output.hex"; \
+		exit 1; \
+	fi
+	@$(PYTHON) scripts/bin2hex.py "$(BIN_INPUT)" "$(HEX_OUTPUT)"
+
+wordhex2byte:
+	$(call banner,WORDHEX TO BYTEHEX)
+	@if [ -z "$(WORDHEX_INPUT)" ]; then \
+		echo "ERROR: WORDHEX_INPUT is required."; \
+		echo "Usage: make wordhex2byte WORDHEX_INPUT=input.wordhex HEX_OUTPUT=mem/output.hex"; \
+		exit 1; \
+	fi
+	@$(PYTHON) scripts/wordhex_to_bytehex.py "$(WORDHEX_INPUT)" "$(HEX_OUTPUT)"
 
 fpga: check-fpga dirs
 	$(call banner,FPGA BUILD)
