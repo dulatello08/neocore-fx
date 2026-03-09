@@ -27,6 +27,12 @@ CORE_ANY_FILELIST ?= filelists/sim_core_any.f
 CORE_ANY_TOP ?= tb_core_any
 CORE_ANY_BUILD_DIR ?= $(BUILD_ROOT)/sim_core_any
 CORE_ANY_BIN ?= $(CORE_ANY_BUILD_DIR)/tb_core_any_simv
+
+FWD_HAZ_FILELIST ?= filelists/sim_forwarding_hazard.f
+FWD_HAZ_TOP ?= tb_forwarding_hazard
+FWD_HAZ_BUILD_DIR ?= $(BUILD_ROOT)/sim_forwarding_hazard
+FWD_HAZ_BIN ?= $(FWD_HAZ_BUILD_DIR)/tb_forwarding_hazard_simv
+
 PROGRAM ?= mem/test_smoke.hex
 BIN_INPUT ?=
 WORDHEX_INPUT ?=
@@ -59,7 +65,8 @@ endef
 
 .PHONY: help check-sim check-fpga dirs build run waves list \
 	core-smoke-build core-smoke-run core-any-build core-any-run \
-	run_smoke run_any profile_any debug_any waves_any \
+	forward-hazard-build forward-hazard-run \
+	run_smoke run_any run_forward_hazard profile_any debug_any waves_any \
 	smoke-hex bin2hex wordhex2byte \
 	fpga fpga-list clean clobber
 
@@ -70,6 +77,7 @@ help:
 	@printf "  $(CLR_GREEN)make waves$(CLR_RESET)      Build + run with +WAVES (VCD)\n"
 	@printf "  $(CLR_GREEN)make run_smoke$(CLR_RESET)  Build + run integrated core smoke TB\n"
 	@printf "  $(CLR_GREEN)make run_any$(CLR_RESET)    Run generic TB with PROGRAM=<byte-hex>\n"
+	@printf "  $(CLR_GREEN)make run_forward_hazard$(CLR_RESET) Run forwarding-hazard regression TB\n"
 	@printf "  $(CLR_GREEN)make profile_any$(CLR_RESET) Run generic TB with +PROFILE stats\n"
 	@printf "  $(CLR_GREEN)make debug_any$(CLR_RESET)  Run generic TB with +DEBUG trace\n"
 	@printf "  $(CLR_GREEN)make waves_any$(CLR_RESET)  Run generic TB with +WAVES dump\n"
@@ -182,6 +190,26 @@ core-any-run: core-any-build
 		--vvp-args "+PROGRAM=$(PROGRAM) $(VVP_ARGS)"
 
 run_any: core-any-run
+
+forward-hazard-build: check-sim
+	$(call banner,FORWARD HAZARD BUILD)
+	@mkdir -p $(FWD_HAZ_BUILD_DIR)
+	@$(PYTHON) $(SIM_HELPER) build \
+		--filelist $(FWD_HAZ_FILELIST) \
+		--out $(FWD_HAZ_BIN) \
+		--top $(FWD_HAZ_TOP) \
+		--iverilog $(IVERILOG) \
+		--flags "$(IVERILOG_FLAGS)" \
+		--build-dir $(FWD_HAZ_BUILD_DIR)
+
+forward-hazard-run: forward-hazard-build
+	$(call banner,FORWARD HAZARD RUN)
+	@$(PYTHON) $(SIM_HELPER) run \
+		--sim $(FWD_HAZ_BIN) \
+		--vvp $(VVP) \
+		--vvp-args "$(VVP_ARGS)"
+
+run_forward_hazard: forward-hazard-run
 
 profile_any: core-any-build
 	$(call banner,CORE ANY PROFILE)
