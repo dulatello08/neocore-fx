@@ -56,30 +56,6 @@ module tb_core_smoke;
     #(CLK_HALF_PERIOD_NS) clk = ~clk;
   end
 
-  always @(posedge clk) begin
-    if ($test$plusargs("DEBUG_HALT") && rst_n) begin
-      if (current_pc <= 32'h0000_0030) begin
-        $display("PC_TRACE: cyc=%0d pc=0x%08h if2_inst=0x%08h id_valid=%b id_halt=%b",
-                 cycle_count,
-                 current_pc,
-                 dut.u_core.id_if2_inst,
-                 dut.u_core.idex_valid,
-                 dut.u_core.idex_is_halt);
-      end
-      if (dut.u_core.idex_is_halt || dut.u_core.exe_mem_is_halt || dut.u_core.memwb_is_halt
-       || dut.u_core.wb_halted_pulse) begin
-        $display("HALT_TRACE: cyc=%0d pc=0x%08h id=%b ex=%b mem=%b wb_pulse=%b halted=%b",
-                 cycle_count,
-                 current_pc,
-                 dut.u_core.idex_is_halt,
-                 dut.u_core.exe_mem_is_halt,
-                 dut.u_core.memwb_is_halt,
-                 dut.u_core.wb_halted_pulse,
-                 halted);
-      end
-    end
-  end
-
   // ==========================================================================
   // Helpers
   // ==========================================================================
@@ -128,14 +104,6 @@ module tb_core_smoke;
     end
   endtask
 
-  function automatic logic [31:0] read_word(input logic [31:0] addr);
-    logic [13:0] word_idx;
-    begin
-      word_idx = addr[15:2];
-      read_word = dut.u_mem.mem[word_idx];
-    end
-  endfunction
-
   task automatic clear_memory;
     int i;
     begin
@@ -177,12 +145,6 @@ module tb_core_smoke;
     write_word(32'h0000_0008, 32'h0131_2000);
     write_word(32'h0000_000C, 32'h0243_1000);
     write_word(32'h0000_0010, 32'h4000_0000);
-    if ($test$plusargs("DEBUG_HALT")) begin
-      $display("MEM_DEBUG: [0x08]=0x%08h [0x0C]=0x%08h [0x10]=0x%08h",
-               read_word(32'h0000_0008),
-               read_word(32'h0000_000C),
-               read_word(32'h0000_0010));
-    end
 
     rst_n <= 1'b1;
 
@@ -198,7 +160,7 @@ module tb_core_smoke;
     check_eq32(dut.u_core.u_regfile.regs[1], 32'h0000_0005, "R1 after ADDI");
     check_eq32(dut.u_core.u_regfile.regs[2], 32'h0000_000C, "R2 with forwarded ADDI");
     check_eq32(dut.u_core.u_regfile.regs[3], 32'h0000_0011, "R3 chained ADD result");
-    check_eq32(dut.u_core.u_regfile.regs[4], 32'h0000_0005, "R4 SUB result under current forwarding policy");
+    check_eq32(dut.u_core.u_regfile.regs[4], 32'h0000_000C, "R4 SUB result");
     check_eq32(mem_stall_count, 32'h0000_0000, "No memory-wait stall in ALU-only smoke");
 
     $display("========================================");

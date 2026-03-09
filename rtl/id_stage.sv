@@ -37,11 +37,6 @@ module id_stage
     input  logic [3:0]  mem_rd_i,
     input  logic        mem_reg_write_i,
 
-    // Writeback-stage hazard/forward context.
-    input  logic        wb_valid_i,
-    input  logic [3:0]  wb_rd_i,
-    input  logic        wb_reg_write_i,
-
     // Stall request for load-use hazard.
     output logic        load_use_stall_o,
 
@@ -357,9 +352,6 @@ module id_stage
             end else if (mem_valid_i && mem_reg_write_i
                       && (mem_rd_i == rs1_d) && (mem_rd_i != 4'h0)) begin
                 fwd_rs1_sel_d = FWD_WB;
-            end else if (wb_valid_i && wb_reg_write_i
-                      && (wb_rd_i == rs1_d) && (wb_rd_i != 4'h0)) begin
-                fwd_rs1_sel_d = FWD_WB;
             end
         end
 
@@ -370,9 +362,6 @@ module id_stage
                 fwd_rs2_sel_d = FWD_MEM;
             end else if (mem_valid_i && mem_reg_write_i
                       && (mem_rd_i == rs2_d) && (mem_rd_i != 4'h0)) begin
-                fwd_rs2_sel_d = FWD_WB;
-            end else if (wb_valid_i && wb_reg_write_i
-                      && (wb_rd_i == rs2_d) && (wb_rd_i != 4'h0)) begin
                 fwd_rs2_sel_d = FWD_WB;
             end
         end

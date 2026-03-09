@@ -56,7 +56,7 @@ Produces `tb_core_any.vcd` when `+WAVES` is enabled.
 
 ## 5) Current Caveat
 
-The integrated frontend currently has edge cases around stall/replay interactions.
+The integrated frontend currently has edge cases around stall/redirect interactions.
 
 Practical guidance for v0.5 runs:
 
