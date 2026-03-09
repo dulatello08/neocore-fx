@@ -58,7 +58,7 @@ module if2_stage
         pred_taken_o = 1'b0;
         pred_target_o = 32'h0000_0000;
 
-        if (if1_valid_i && i_done_i && !i_err_i) begin
+        if (!stall_i && !flush_i && if1_valid_i && i_done_i && !i_err_i) begin
             if (class_f == 4'h4) begin
                 case (op_f)
                     4'h0: begin
@@ -92,14 +92,14 @@ module if2_stage
             id_inst_o        <= 32'h0000_0000;
             id_pred_taken_o  <= 1'b0;
             id_fetch_fault_o <= 1'b0;
+        end else if (flush_i) begin
+            id_valid_o       <= 1'b0;
+            id_pc_o          <= 32'h0000_0000;
+            id_inst_o        <= 32'h0000_0000;
+            id_pred_taken_o  <= 1'b0;
+            id_fetch_fault_o <= 1'b0;
         end else if (!stall_i) begin
-            if (flush_i) begin
-                id_valid_o       <= 1'b0;
-                id_pc_o          <= 32'h0000_0000;
-                id_inst_o        <= 32'h0000_0000;
-                id_pred_taken_o  <= 1'b0;
-                id_fetch_fault_o <= 1'b0;
-            end else if (if1_valid_i && i_done_i) begin
+            if (if1_valid_i && i_done_i) begin
                 id_valid_o       <= 1'b1;
                 id_pc_o          <= if1_pc_i;
                 id_inst_o        <= i_rdata_i;

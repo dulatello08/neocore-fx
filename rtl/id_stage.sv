@@ -395,8 +395,35 @@ module id_stage
             idex_fwd_rs1_sel_o   <= FWD_NONE;
             idex_fwd_rs2_sel_o   <= FWD_NONE;
             idex_illegal_o       <= 1'b0;
+        end else if (flush_i) begin
+            idex_valid_o         <= 1'b0;
+            idex_pc_o            <= 32'h0000_0000;
+            idex_rd_o            <= 4'h0;
+            idex_rs1_addr_o      <= 4'h0;
+            idex_rs2_addr_o      <= 4'h0;
+            idex_rs1_data_o      <= 32'h0000_0000;
+            idex_rs2_data_o      <= 32'h0000_0000;
+            idex_imm_o           <= 32'h0000_0000;
+            idex_alu_op_o        <= ALU_ADD;
+            idex_alu_src_imm_o   <= 1'b0;
+            idex_mem_read_o      <= 1'b0;
+            idex_mem_write_o     <= 1'b0;
+            idex_mem_size_o      <= SIZE_WORD;
+            idex_load_sign_ext_o <= 1'b0;
+            idex_reg_write_o     <= 1'b0;
+            idex_branch_type_o   <= BR_NONE;
+            idex_is_jal_o        <= 1'b0;
+            idex_is_jalr_o       <= 1'b0;
+            idex_is_lui_o        <= 1'b0;
+            idex_is_lpc_o        <= 1'b0;
+            idex_is_halt_o       <= 1'b0;
+            idex_pred_taken_o    <= 1'b0;
+            idex_fetch_fault_o   <= 1'b0;
+            idex_fwd_rs1_sel_o   <= FWD_NONE;
+            idex_fwd_rs2_sel_o   <= FWD_NONE;
+            idex_illegal_o       <= 1'b0;
         end else if (!stall_i) begin
-            if (flush_i || bubble_i) begin
+            if (bubble_i) begin
                 idex_valid_o         <= 1'b0;
                 idex_pc_o            <= 32'h0000_0000;
                 idex_rd_o            <= 4'h0;
