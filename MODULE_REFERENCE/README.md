@@ -1,7 +1,7 @@
 # Module Reference Documentation
 
 > [!TIP]
-> Docs Home: [../README.md](../README.md)
+> Docs Home: [../DOCS_INDEX.md](../DOCS_INDEX.md)
 
 This directory contains module-level references for the NeoCoreFX RTL.
 
@@ -48,3 +48,8 @@ neocorefx_fpga_top
     ├── biu
     └── mem
 ```
+
+## Related Docs
+
+- [../TESTING_AND_VERIFICATION.md](../TESTING_AND_VERIFICATION.md)
+- [../docs/simulation-workflow.md](../docs/simulation-workflow.md)

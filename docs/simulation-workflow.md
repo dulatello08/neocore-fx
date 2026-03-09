@@ -1,65 +1,88 @@
 # NeoCoreFX Simulation Workflow
 
+> [!TIP]
+> Docs Home: [../DOCS_INDEX.md](../DOCS_INDEX.md)
+
 Status: v0.5 practical runbook for integrated-core simulation.
 
-## 1) Fast Path
+## Quick Start (Authoritative Order)
 
 ```bash
 make run_smoke
+make run_forward_hazard
 make run_any PROGRAM=mem/test_smoke.hex
-make profile_any PROGRAM=mem/test_smoke.hex
 ```
 
-## 2) Generic Program Flow
+This order validates:
 
-Programs for `tb_core_any` use **byte-per-line hex** (`00`..`FF`) loaded from address `0x0000`.
+1. baseline integrated-core operation (`run_smoke`)
+2. forwarding-hazard regression lock (`run_forward_hazard`)
+3. generic loader path and stats printing (`run_any`)
 
-- Convert raw binaries:
-  ```bash
-  make bin2hex BIN_INPUT=program.bin HEX_OUTPUT=mem/program.hex
-  ```
-- Convert word-per-line hex (`32-bit`) to byte-per-line:
-  ```bash
-  make wordhex2byte WORDHEX_INPUT=program.wordhex HEX_OUTPUT=mem/program.hex
-  ```
-- Run with optional cycle cap:
-  ```bash
-  python3 scripts/run_any.py --program mem/program.hex --max-cycles 200000
-  ```
+## Core Make Targets
 
-## 3) Profiling Outputs
+- `make run_smoke`
+  - deterministic smoke sequence in `tb_core_smoke`
+- `make run_forward_hazard`
+  - dedicated stale-WB-forward regression in `tb_forwarding_hazard`
+- `make run_any PROGRAM=mem/<program>.hex`
+  - program execution through `tb_core_any`
+- `make profile_any PROGRAM=...`
+  - adds profiling output and optional memory dumps
+- `make debug_any PROGRAM=...`
+  - adds cycle-by-cycle debug stream
+- `make waves_any PROGRAM=...`
+  - emits `tb_core_any.vcd`
+
+## Program Image Flow
+
+Programs for `tb_core_any` use byte-per-line hex (`00`..`FF`) loaded from address `0x0000`.
+
+Supported conversion paths:
+
+```bash
+make bin2hex BIN_INPUT=program.bin HEX_OUTPUT=mem/program.hex
+make wordhex2byte WORDHEX_INPUT=program.wordhex HEX_OUTPUT=mem/program.hex
+```
+
+Python wrapper alternative:
+
+```bash
+python3 scripts/run_any.py --program mem/program.hex --max-cycles 200000
+```
+
+## Built-In Program Images
+
+- `mem/test_smoke.hex`: ALU chain baseline + halt.
+- `mem/test_halt.hex`: immediate halt path.
+- `mem/test_forwarding_hazard.hex`: stale-WB-forward regression program.
+
+## Profiling and Logs
 
 `tb_core_any` prints:
 
 - total cycles
-- retired instruction count
+- retired instructions
 - retired IPC
 - redirect count
 - load-use stall cycles
 - memory-wait stall cycles
-- WB fault flag
+- writeback fault flag
 - full register dump
 
-To extract these into machine-readable JSON:
+To extract profiling into JSON:
 
 ```bash
 python3 scripts/profile_extract.py build/logs/core_any.log --out build/logs/core_any.json
 ```
 
-## 4) Waveforms
+## Caveats and Practical Guidance
 
-```bash
-make waves_any PROGRAM=mem/test_smoke.hex
-```
+The current frontend has known edge cases around combined stall and redirect timing.
 
-Produces `tb_core_any.vcd` when `+WAVES` is enabled.
+Recommended usage:
 
-## 5) Current Caveat
-
-The integrated frontend currently has edge cases around stall/redirect interactions.
-
-Practical guidance for v0.5 runs:
-
-- prefer short, deterministic smoke programs for CI bring-up
-- use `MAX_CYCLES` in long exploratory runs
-- treat `tb_core_any` as a bring-up/profiling harness, not yet a full architectural conformance oracle
+- keep CI on short deterministic images
+- cap exploratory runs with `MAX_CYCLES`
+- use `run_forward_hazard` as mandatory guardrail after hazard/forwarding edits
+- treat `tb_core_any` as integration/profiling harness, not a full ISA conformance suite

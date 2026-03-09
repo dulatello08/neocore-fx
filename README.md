@@ -2,6 +2,12 @@
 
 NeoCoreFX RTL, testbenches, and build tooling.
 
+## Documentation
+
+- Docs hub: [DOCS_INDEX.md](DOCS_INDEX.md)
+- Verification guide: [TESTING_AND_VERIFICATION.md](TESTING_AND_VERIFICATION.md)
+- Simulation runbook: [docs/simulation-workflow.md](docs/simulation-workflow.md)
+
 ## License
 
 NeoCore-FX RTL and testbench code are licensed under Apache License 2.0.  
@@ -19,6 +25,7 @@ The NeoCore-FX / NeoCore16x32 toolchain is licensed separately under GPL-3.0.
 │   ├── sim_core.f
 │   ├── sim_core_smoke.f
 │   ├── sim_core_any.f
+│   ├── sim_forwarding_hazard.f
 │   ├── sim_biu.f
 │   ├── sim_mem.f
 │   ├── sim_halt.f
@@ -27,6 +34,7 @@ The NeoCore-FX / NeoCore16x32 toolchain is licensed separately under GPL-3.0.
 ├── mem/
 │   ├── test_smoke.hex
 │   ├── test_halt.hex
+│   ├── test_forwarding_hazard.hex
 │   └── README.md
 ├── rtl/
 │   ├── core_pkg.sv
@@ -47,6 +55,7 @@ The NeoCore-FX / NeoCore16x32 toolchain is licensed separately under GPL-3.0.
 │   ├── tb_pkg.sv
 │   ├── tb_core_smoke.sv
 │   ├── tb_core_any.sv
+│   ├── tb_forwarding_hazard.sv
 │   ├── tb_biu.sv
 │   ├── tb_mem.sv
 │   ├── tb_halt_path.sv
@@ -73,7 +82,9 @@ Integrated core workflows:
 
 ```bash
 make run_smoke
+make run_forward_hazard
 make run_any PROGRAM=mem/test_smoke.hex
+make run_any PROGRAM=mem/test_forwarding_hazard.hex
 make profile_any PROGRAM=mem/test_smoke.hex
 make debug_any PROGRAM=mem/test_smoke.hex
 make waves_any PROGRAM=mem/test_smoke.hex
