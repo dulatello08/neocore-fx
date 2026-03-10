@@ -38,12 +38,19 @@ module if1_stage #(
     logic [31:0] pc_q;
     logic [31:0] fetch_pc;
     logic        pred_take;
+    logic        redirect_pending_q;
+    logic [31:0] redirect_pending_pc_q;
 
     always_comb begin
-        pred_take = pred_valid_i && pred_taken_i;
+        pred_take = pred_valid_i
+                 && pred_taken_i
+                 && !redirect_pending_q
+                 && !redirect_valid_i;
         fetch_pc = pc_q;
 
-        if (redirect_valid_i) begin
+        if (redirect_pending_q) begin
+            fetch_pc = redirect_pending_pc_q;
+        end else if (redirect_valid_i) begin
             fetch_pc = redirect_pc_i;
         end else if (pred_take) begin
             fetch_pc = pred_target_i;
@@ -60,11 +67,24 @@ module if1_stage #(
             if2_valid_o      <= 1'b0;
             if2_pc_o         <= RESET_PC;
             if2_pred_taken_o <= 1'b0;
-        end else if (!stall_i) begin
-            if2_valid_o      <= 1'b1;
-            if2_pc_o         <= fetch_pc;
-            if2_pred_taken_o <= pred_take && !redirect_valid_i;
-            pc_q             <= fetch_pc + 32'd4;
+            redirect_pending_q <= 1'b0;
+            redirect_pending_pc_q <= RESET_PC;
+        end else begin
+            if (redirect_valid_i) begin
+                redirect_pending_q <= 1'b1;
+                redirect_pending_pc_q <= redirect_pc_i;
+            end
+
+            if (!stall_i) begin
+                if2_valid_o      <= 1'b1;
+                if2_pc_o         <= fetch_pc;
+                if2_pred_taken_o <= pred_take;
+                pc_q             <= fetch_pc + 32'd4;
+
+                if (redirect_pending_q || redirect_valid_i) begin
+                    redirect_pending_q <= 1'b0;
+                end
+            end
         end
     end
 endmodule
