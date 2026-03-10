@@ -32,6 +32,7 @@ make check-sim
 ```bash
 make run_smoke
 make run_forward_hazard
+make run_frontend_timing
 make run_any PROGRAM=mem/test_smoke.hex
 ```
 
@@ -46,6 +47,10 @@ make run_any PROGRAM=mem/test_smoke.hex
 - `make run_forward_hazard`
   - Bench: `tb/tb_forwarding_hazard.sv`
   - Purpose: lock regression for stale WB-forward selection hazard.
+
+- `make run_frontend_timing`
+  - Bench: `tb/tb_frontend_timing.sv`
+  - Purpose: lock regression for combined frontend stall+redirect timing behavior.
 
 ### Program Loader Bench
 
@@ -89,11 +94,12 @@ python3 scripts/profile_extract.py build/logs/core_any.log --out build/logs/core
 
 ## Recommended Pre-Merge Minimum
 
-Run all three before merging behavior changes:
+Run all four before merging behavior changes:
 
 1. `make run_smoke`
 2. `make run_forward_hazard`
-3. `make run_any PROGRAM=mem/test_smoke.hex`
+3. `make run_frontend_timing`
+4. `make run_any PROGRAM=mem/test_smoke.hex`
 
 For hazard-control or forwarding changes, also run:
 
@@ -104,10 +110,11 @@ For hazard-control or forwarding changes, also run:
 When a test fails, debug in this order:
 
 1. Decode and hazard select logic in `rtl/id_stage.sv`
-2. Forward mux and branch resolve behavior in `rtl/exe_stage.sv`
-3. Stage-control wiring in `rtl/neocorefx_core.sv`
-4. Memory handshake/response behavior in `rtl/mem_stage.sv` and `rtl/biu.sv`
-5. Program encoding and byte order in `mem/*.hex`
+2. Frontend control and prediction path in `rtl/if1_stage.sv` and `rtl/if2_stage.sv`
+3. Forward mux and branch resolve behavior in `rtl/exe_stage.sv`
+4. Stage-control wiring in `rtl/neocorefx_core.sv`
+5. Memory handshake/response behavior in `rtl/mem_stage.sv` and `rtl/biu.sv`
+6. Program encoding and byte order in `mem/*.hex`
 
 ## Related Docs
 

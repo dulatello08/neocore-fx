@@ -11,6 +11,7 @@
 
 - `tb_core_smoke.sv`: deterministic integrated-core smoke run.
 - `tb_forwarding_hazard.sv`: regression for stale WB-forward hazard behavior.
+- `tb_frontend_timing.sv`: regression for combined frontend stall+redirect timing.
 - `tb_core_any.sv`: generic program loader (`+PROGRAM=<byte-hex>`).
 
 ## Block-Level Testbenches
@@ -24,6 +25,7 @@
 ```bash
 make run_smoke
 make run_forward_hazard
+make run_frontend_timing
 make run_any PROGRAM=mem/test_smoke.hex
 make run_any PROGRAM=mem/test_forwarding_hazard.hex
 make profile_any PROGRAM=mem/test_smoke.hex

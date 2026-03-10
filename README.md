@@ -26,6 +26,7 @@ The NeoCore-FX / NeoCore16x32 toolchain is licensed separately under GPL-3.0.
 │   ├── sim_core_smoke.f
 │   ├── sim_core_any.f
 │   ├── sim_forwarding_hazard.f
+│   ├── sim_frontend_timing.f
 │   ├── sim_biu.f
 │   ├── sim_mem.f
 │   ├── sim_halt.f
@@ -56,6 +57,7 @@ The NeoCore-FX / NeoCore16x32 toolchain is licensed separately under GPL-3.0.
 │   ├── tb_core_smoke.sv
 │   ├── tb_core_any.sv
 │   ├── tb_forwarding_hazard.sv
+│   ├── tb_frontend_timing.sv
 │   ├── tb_biu.sv
 │   ├── tb_mem.sv
 │   ├── tb_halt_path.sv
@@ -83,6 +85,7 @@ Integrated core workflows:
 ```bash
 make run_smoke
 make run_forward_hazard
+make run_frontend_timing
 make run_any PROGRAM=mem/test_smoke.hex
 make run_any PROGRAM=mem/test_forwarding_hazard.hex
 make profile_any PROGRAM=mem/test_smoke.hex
