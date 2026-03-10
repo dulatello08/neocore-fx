@@ -33,6 +33,11 @@ FWD_HAZ_TOP ?= tb_forwarding_hazard
 FWD_HAZ_BUILD_DIR ?= $(BUILD_ROOT)/sim_forwarding_hazard
 FWD_HAZ_BIN ?= $(FWD_HAZ_BUILD_DIR)/tb_forwarding_hazard_simv
 
+FRONTEND_TIMING_FILELIST ?= filelists/sim_frontend_timing.f
+FRONTEND_TIMING_TOP ?= tb_frontend_timing
+FRONTEND_TIMING_BUILD_DIR ?= $(BUILD_ROOT)/sim_frontend_timing
+FRONTEND_TIMING_BIN ?= $(FRONTEND_TIMING_BUILD_DIR)/tb_frontend_timing_simv
+
 PROGRAM ?= mem/test_smoke.hex
 BIN_INPUT ?=
 WORDHEX_INPUT ?=
@@ -66,7 +71,8 @@ endef
 .PHONY: help check-sim check-fpga dirs build run waves list \
 	core-smoke-build core-smoke-run core-any-build core-any-run \
 	forward-hazard-build forward-hazard-run \
-	run_smoke run_any run_forward_hazard profile_any debug_any waves_any \
+	frontend-timing-build frontend-timing-run \
+	run_smoke run_any run_forward_hazard run_frontend_timing profile_any debug_any waves_any \
 	smoke-hex bin2hex wordhex2byte \
 	fpga fpga-list clean clobber
 
@@ -78,6 +84,7 @@ help:
 	@printf "  $(CLR_GREEN)make run_smoke$(CLR_RESET)  Build + run integrated core smoke TB\n"
 	@printf "  $(CLR_GREEN)make run_any$(CLR_RESET)    Run generic TB with PROGRAM=<byte-hex>\n"
 	@printf "  $(CLR_GREEN)make run_forward_hazard$(CLR_RESET) Run forwarding-hazard regression TB\n"
+	@printf "  $(CLR_GREEN)make run_frontend_timing$(CLR_RESET) Run frontend stall+redirect timing TB\n"
 	@printf "  $(CLR_GREEN)make profile_any$(CLR_RESET) Run generic TB with +PROFILE stats\n"
 	@printf "  $(CLR_GREEN)make debug_any$(CLR_RESET)  Run generic TB with +DEBUG trace\n"
 	@printf "  $(CLR_GREEN)make waves_any$(CLR_RESET)  Run generic TB with +WAVES dump\n"
@@ -210,6 +217,26 @@ forward-hazard-run: forward-hazard-build
 		--vvp-args "$(VVP_ARGS)"
 
 run_forward_hazard: forward-hazard-run
+
+frontend-timing-build: check-sim
+	$(call banner,FRONTEND TIMING BUILD)
+	@mkdir -p $(FRONTEND_TIMING_BUILD_DIR)
+	@$(PYTHON) $(SIM_HELPER) build \
+		--filelist $(FRONTEND_TIMING_FILELIST) \
+		--out $(FRONTEND_TIMING_BIN) \
+		--top $(FRONTEND_TIMING_TOP) \
+		--iverilog $(IVERILOG) \
+		--flags "$(IVERILOG_FLAGS)" \
+		--build-dir $(FRONTEND_TIMING_BUILD_DIR)
+
+frontend-timing-run: frontend-timing-build
+	$(call banner,FRONTEND TIMING RUN)
+	@$(PYTHON) $(SIM_HELPER) run \
+		--sim $(FRONTEND_TIMING_BIN) \
+		--vvp $(VVP) \
+		--vvp-args "$(VVP_ARGS)"
+
+run_frontend_timing: frontend-timing-run
 
 profile_any: core-any-build
 	$(call banner,CORE ANY PROFILE)
