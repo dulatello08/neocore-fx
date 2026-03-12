@@ -33,7 +33,7 @@ module neocorefx_fpga_top (
 
   neocorefx_top u_soc (
     .clk                    (clk_25mhz),
-    .rst_n                  (btn[0]),
+    .rst_btn_n              (btn[0]),
     .en                     (1'b1),
     .count                  (status_count),
     .halted_o               (halted),

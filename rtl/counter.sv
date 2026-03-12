@@ -8,7 +8,7 @@ module counter #(
 ) (
   // Clock/reset controls.
   input  logic             clk,
-  input  logic             rst_n,
+  input  logic             rst,
 
   // Count enable.
   input  logic             en,
@@ -19,8 +19,8 @@ module counter #(
   timeunit 1ns;
   timeprecision 1ps;
 
-  always_ff @(posedge clk or negedge rst_n) begin
-    if (!rst_n) begin
+  always_ff @(posedge clk) begin
+    if (rst) begin
       count <= '0;
     end else if (en) begin
       count <= count + 1'b1;

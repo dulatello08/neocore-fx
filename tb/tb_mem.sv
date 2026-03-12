@@ -10,7 +10,7 @@ module tb_mem;
 
     // Clock/reset.
     logic        clk;
-    logic        rst_n;
+    logic        rst;
 
     // I-Bus interface.
     logic        ibus_cyc;
@@ -37,7 +37,7 @@ module tb_mem;
 
     mem dut (
         .clk        (clk),
-        .rst_n      (rst_n),
+        .rst        (rst),
         .ibus_cyc   (ibus_cyc),
         .ibus_stb   (ibus_stb),
         .ibus_addr  (ibus_addr),
@@ -144,7 +144,7 @@ module tb_mem;
         bit          err_seen;
 
         clk = 1'b0;
-        rst_n = 1'b0;
+        rst = 1'b1;
         ibus_cyc = 1'b0;
         ibus_stb = 1'b0;
         ibus_addr = 32'h0000_0000;
@@ -163,7 +163,7 @@ module tb_mem;
         end
 
         repeat (4) @(posedge clk);
-        rst_n <= 1'b1;
+        rst <= 1'b0;
         @(posedge clk);
         #1;
 

@@ -6,7 +6,7 @@
 module neocorefx_top (
   // Clock/reset controls.
   input  logic       clk,
-  input  logic       rst_n,
+  input  logic       rst_btn_n,
 
   // External run enable.
   input  logic       en,
@@ -32,7 +32,7 @@ module neocorefx_top (
   // ============================================================================
 
   logic rst;
-  assign rst = !rst_n;
+  assign rst = !rst_btn_n;
 
   // ============================================================================
   // Core <-> BIU wiring
@@ -168,7 +168,7 @@ module neocorefx_top (
 
   mem u_mem (
     .clk                    (clk),
-    .rst_n                  (rst_n),
+    .rst                    (rst),
     .ibus_cyc               (ibus_cyc),
     .ibus_stb               (ibus_stb),
     .ibus_addr              (ibus_addr),

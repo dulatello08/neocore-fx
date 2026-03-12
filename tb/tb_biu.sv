@@ -16,7 +16,6 @@ module tb_biu;
     // Clock/reset.
     logic clk;
     logic rst;
-    logic rst_n;
 
     // CPU-side instruction port.
     logic        i_req;
@@ -60,8 +59,6 @@ module tb_biu;
     int pass_count;
     int fail_count;
 
-    assign rst_n = ~rst;
-
     biu u_biu (
         .clk        (clk),
         .rst        (rst),
@@ -99,7 +96,7 @@ module tb_biu;
 
     mem u_mem (
         .clk        (clk),
-        .rst_n      (rst_n),
+        .rst        (rst),
         .ibus_cyc   (ibus_cyc),
         .ibus_stb   (ibus_stb),
         .ibus_addr  (ibus_addr),
