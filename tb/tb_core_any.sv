@@ -16,7 +16,7 @@ module tb_core_any;
   // ==========================================================================
 
   logic clk;
-  logic rst_n;
+  logic top_rst_btn_n;
 
   logic [7:0]  count;
   logic        halted;
@@ -39,7 +39,7 @@ module tb_core_any;
 
   neocorefx_top dut (
     .clk                    (clk),
-    .rst_n                  (rst_n),
+    .rst_btn_n              (top_rst_btn_n),
     .en                     (1'b1),
     .count                  (count),
     .halted_o               (halted),
@@ -66,26 +66,38 @@ module tb_core_any;
 
   task automatic write_byte(input logic [31:0] addr, input logic [7:0] data);
     logic [13:0] word_idx;
+    logic [1:0] bank_sel;
+    logic [11:0] row_addr;
+    logic [1:0] byte_sel;
     begin
       word_idx = addr[15:2];
-      case (addr[1:0])
-        2'b00: dut.u_mem.mem[word_idx][31:24] = data;
-        2'b01: dut.u_mem.mem[word_idx][23:16] = data;
-        2'b10: dut.u_mem.mem[word_idx][15:8] = data;
-        default: dut.u_mem.mem[word_idx][7:0] = data;
+      bank_sel = word_idx[1:0];
+      row_addr = word_idx[13:2];
+      byte_sel = addr[1:0];
+      case (bank_sel)
+        2'b00: dut.u_mem.bank_gen[0].mem[row_addr][8*(3-byte_sel) +: 8] = data;
+        2'b01: dut.u_mem.bank_gen[1].mem[row_addr][8*(3-byte_sel) +: 8] = data;
+        2'b10: dut.u_mem.bank_gen[2].mem[row_addr][8*(3-byte_sel) +: 8] = data;
+        default: dut.u_mem.bank_gen[3].mem[row_addr][8*(3-byte_sel) +: 8] = data;
       endcase
     end
   endtask
 
   function automatic logic [7:0] read_byte(input logic [31:0] addr);
     logic [13:0] word_idx;
+    logic [1:0] bank_sel;
+    logic [11:0] row_addr;
+    logic [1:0] byte_sel;
     begin
       word_idx = addr[15:2];
-      case (addr[1:0])
-        2'b00: read_byte = dut.u_mem.mem[word_idx][31:24];
-        2'b01: read_byte = dut.u_mem.mem[word_idx][23:16];
-        2'b10: read_byte = dut.u_mem.mem[word_idx][15:8];
-        default: read_byte = dut.u_mem.mem[word_idx][7:0];
+      bank_sel = word_idx[1:0];
+      row_addr = word_idx[13:2];
+      byte_sel = addr[1:0];
+      case (bank_sel)
+        2'b00: read_byte = dut.u_mem.bank_gen[0].mem[row_addr][8*(3-byte_sel) +: 8];
+        2'b01: read_byte = dut.u_mem.bank_gen[1].mem[row_addr][8*(3-byte_sel) +: 8];
+        2'b10: read_byte = dut.u_mem.bank_gen[2].mem[row_addr][8*(3-byte_sel) +: 8];
+        default: read_byte = dut.u_mem.bank_gen[3].mem[row_addr][8*(3-byte_sel) +: 8];
       endcase
     end
   endfunction
@@ -93,8 +105,11 @@ module tb_core_any;
   task automatic clear_memory;
     int i;
     begin
-      for (i = 0; i < 16384; i = i + 1) begin
-        dut.u_mem.mem[i] = 32'h0000_0000;
+      for (i = 0; i < 4096; i = i + 1) begin
+        dut.u_mem.bank_gen[0].mem[i] = 32'h0000_0000;
+        dut.u_mem.bank_gen[1].mem[i] = 32'h0000_0000;
+        dut.u_mem.bank_gen[2].mem[i] = 32'h0000_0000;
+        dut.u_mem.bank_gen[3].mem[i] = 32'h0000_0000;
       end
     end
   endtask
@@ -160,7 +175,7 @@ module tb_core_any;
   // ==========================================================================
 
   always @(posedge clk) begin
-    if (debug_enabled && rst_n) begin
+    if (debug_enabled && top_rst_btn_n) begin
       $display("Cycle %0d: PC=0x%08h Halt=%b Count=0x%02h WB_Fault=%b", 
                cycle_count, current_pc, halted, count, wb_fault);
       $display("         Stall(load/mem)=%0d/%0d Redirects=%0d Retired=%0d",
@@ -179,7 +194,7 @@ module tb_core_any;
     int timeout;
 
     clk = 1'b0;
-    rst_n = 1'b0;
+    top_rst_btn_n = 1'b0;
     debug_enabled = 1'b0;
     profile_enabled = 1'b0;
     max_cycles = MAX_CYCLES_DEFAULT;
@@ -223,7 +238,7 @@ module tb_core_any;
       dump_memory_window(32'h0000_0000, 4);
     end
 
-    rst_n <= 1'b1;
+    top_rst_btn_n <= 1'b1;
 
     timeout = 0;
     while (!halted && (timeout < max_cycles)) begin
