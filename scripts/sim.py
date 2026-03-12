@@ -270,7 +270,7 @@ def cmd_fpga(args: argparse.Namespace) -> int:
             seen_context.add(src)
 
         converted = sv2v_dir / f"{idx:03d}_{src.stem}.v"
-        cmd = [args.sv2v, *sv2v_inc, *(str(x) for x in context_sources)]
+        cmd = [args.sv2v, "-D", "SYNTHESIS", *sv2v_inc, *(str(x) for x in context_sources)]
         run_cmd_to_file(cmd, f"sv2v {src.name}", converted)
         converted_sources.append(converted)
 
