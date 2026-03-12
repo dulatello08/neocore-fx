@@ -6,7 +6,7 @@
 module mem (
     // Clock/reset controls.
     input  logic        clk,
-    input  logic        rst_n,
+    input  logic        rst,
 
     // I-Bus read-only port.
     input  logic        ibus_cyc,
@@ -32,69 +32,119 @@ module mem (
 
     import mem_pkg::*;
 
-    logic [31:0] mem [0:MEM_WORDS-1];
-
-    initial begin : init_mem
-        int unsigned i;
-        for (i = 0; i < MEM_WORDS; i = i + 1) begin
-            mem[i] = 32'h0000_0000;
-        end
-    end
+    localparam int unsigned BANKS = 4;
+    localparam int unsigned BANK_DEPTH = MEM_WORDS / BANKS;
+    localparam int unsigned BANK_ADDR_W = $clog2(BANK_DEPTH);
 
     // -------------------------------------------------------------------------
-    // I-Bus: 1-cycle pipelined BRAM read (address in -> data out, 1 clock)
+    // Address decode
     // -------------------------------------------------------------------------
     logic ibus_valid;
-    assign ibus_valid = ibus_cyc & ibus_stb;
-
+    logic dbus_valid;
     logic ibus_in_range;
+    logic dbus_in_range;
     logic ibus_aligned;
+
+    logic [13:0] ibus_word_idx;
+    logic [13:0] dbus_word_idx;
+    logic [1:0]  ibus_bank_sel;
+    logic [1:0]  dbus_bank_sel;
+    logic [BANK_ADDR_W-1:0] ibus_row_addr;
+    logic [BANK_ADDR_W-1:0] dbus_row_addr;
+
+    assign ibus_valid    = ibus_cyc & ibus_stb;
+    assign dbus_valid    = dbus_cyc & dbus_stb;
     assign ibus_in_range = mem_addr_in_range(ibus_addr);
+    assign dbus_in_range = mem_addr_in_range(dbus_addr);
     assign ibus_aligned  = (ibus_addr[1:0] == 2'b00);
 
-    always_ff @(posedge clk or negedge rst_n) begin
-        if (!rst_n) begin
-            ibus_ack   <= 1'b0;
-            ibus_err   <= 1'b0;
-            ibus_rdata <= 32'h0000_0000;
-        end else begin
-            ibus_rdata <= mem[mem_word_index(ibus_addr)];
-            ibus_ack   <= ibus_valid & ibus_in_range & ibus_aligned;
-            ibus_err   <= ibus_valid & (~ibus_in_range | ~ibus_aligned);
+    assign ibus_word_idx = mem_word_index(ibus_addr);
+    assign dbus_word_idx = mem_word_index(dbus_addr);
+
+    assign ibus_bank_sel = ibus_word_idx[1:0];
+    assign dbus_bank_sel = dbus_word_idx[1:0];
+    assign ibus_row_addr = ibus_word_idx[13:2];
+    assign dbus_row_addr = dbus_word_idx[13:2];
+
+    // -------------------------------------------------------------------------
+    // BRAM banks
+    // Mirrors cpu-private structure: each bank is a true dual-port 32-bit RAM.
+    // -------------------------------------------------------------------------
+    logic [31:0] ibus_bank_rdata [0:BANKS-1];
+    logic [31:0] dbus_bank_rdata [0:BANKS-1];
+    logic [3:0]  dbus_bank_be [0:BANKS-1];
+    logic [1:0]  ibus_bank_sel_reg;
+    logic [1:0]  dbus_bank_sel_reg;
+
+    always_comb begin
+        for (int i = 0; i < BANKS; i++) begin
+            dbus_bank_be[i] = 4'b0000;
+        end
+        if (dbus_valid && dbus_in_range && dbus_we) begin
+            dbus_bank_be[dbus_bank_sel] = dbus_sel;
         end
     end
 
-    // -------------------------------------------------------------------------
-    // D-Bus: 1-cycle pipelined BRAM read/write
-    // Writes: combinational addr/data/sel merged into BRAM on posedge.
-    // Reads:  data out one cycle after addr presented.
-    // -------------------------------------------------------------------------
-    logic dbus_valid;
-    assign dbus_valid = dbus_cyc & dbus_stb;
+    generate
+        for (genvar i = 0; i < BANKS; i++) begin : bank_gen
+            (* ram_style = "block" *) logic [31:0] mem [0:BANK_DEPTH-1];
+            logic [31:0] rdata_a;
+            logic [31:0] rdata_b;
 
-    logic dbus_in_range;
-    assign dbus_in_range = mem_addr_in_range(dbus_addr);
-
-    logic [13:0] dbus_word_idx;
-    assign dbus_word_idx = mem_word_index(dbus_addr);
-
-    always_ff @(posedge clk or negedge rst_n) begin
-        if (!rst_n) begin
-            dbus_ack   <= 1'b0;
-            dbus_err   <= 1'b0;
-            dbus_rdata <= 32'h0000_0000;
-        end else begin
-            if (dbus_valid && dbus_in_range && dbus_we && (dbus_sel != 4'b0000)) begin
-                mem[dbus_word_idx] <= mem_apply_write_sel(
-                    mem[dbus_word_idx],
-                    dbus_wdata,
-                    dbus_sel
-                );
+            // Port A: instruction fetch (read-only)
+            always_ff @(posedge clk) begin
+                rdata_a <= mem[ibus_row_addr];
             end
 
-            dbus_rdata <= mem[dbus_word_idx];
-            dbus_ack <= dbus_valid & dbus_in_range;
-            dbus_err <= dbus_valid & ~dbus_in_range;
+            // Port B: data access (read/write with byte-lane enables)
+            always_ff @(posedge clk) begin
+                if (dbus_bank_be[i][3]) mem[dbus_row_addr][31:24] <= dbus_wdata[31:24];
+                if (dbus_bank_be[i][2]) mem[dbus_row_addr][23:16] <= dbus_wdata[23:16];
+                if (dbus_bank_be[i][1]) mem[dbus_row_addr][15:8]  <= dbus_wdata[15:8];
+                if (dbus_bank_be[i][0]) mem[dbus_row_addr][7:0]   <= dbus_wdata[7:0];
+                rdata_b <= mem[dbus_row_addr];
+            end
+
+            assign ibus_bank_rdata[i] = rdata_a;
+            assign dbus_bank_rdata[i] = rdata_b;
+
+`ifndef SYNTHESIS
+            initial begin : init_bank_mem
+                int unsigned j;
+                for (j = 0; j < BANK_DEPTH; j = j + 1) begin
+                    mem[j] = 32'h0000_0000;
+                end
+            end
+`endif
+        end
+    endgenerate
+
+    assign ibus_rdata = ibus_bank_rdata[ibus_bank_sel_reg];
+    assign dbus_rdata = dbus_bank_rdata[dbus_bank_sel_reg];
+
+    // -------------------------------------------------------------------------
+    // Request/response pipelining
+    // -------------------------------------------------------------------------
+    always_ff @(posedge clk) begin
+        if (rst) begin
+            ibus_ack       <= 1'b0;
+            ibus_err       <= 1'b0;
+            ibus_bank_sel_reg <= 2'b00;
+            dbus_ack   <= 1'b0;
+            dbus_err   <= 1'b0;
+            dbus_bank_sel_reg <= 2'b00;
+        end else begin
+            ibus_ack <= ibus_valid && ibus_in_range && ibus_aligned;
+            ibus_err <= ibus_valid && (!ibus_in_range || !ibus_aligned);
+            if (ibus_valid && ibus_in_range && ibus_aligned) begin
+                ibus_bank_sel_reg <= ibus_bank_sel;
+            end
+
+            dbus_ack <= dbus_valid && dbus_in_range;
+            dbus_err <= dbus_valid && !dbus_in_range;
+            if (dbus_valid && dbus_in_range) begin
+                dbus_bank_sel_reg <= dbus_bank_sel;
+            end
         end
     end
 endmodule : mem

@@ -52,7 +52,6 @@ module biu (
     localparam logic [1:0] SIZE_HALF = 2'b01;
     localparam logic [1:0] SIZE_WORD = 2'b10;
 
-    logic i_aligned;
     logic i_req_valid;
     logic i_rsp_done;
 
@@ -148,8 +147,9 @@ module biu (
         endcase
     endfunction
 
-    assign i_aligned = (i_addr[1:0] == 2'b00);
-    assign i_req_valid = i_req && i_aligned;
+    // Keep I-port handshake fully synchronous with memory response to avoid
+    // combinational feedback through frontend prediction logic.
+    assign i_req_valid = i_req;
     assign i_rsp_done = ibus_ack || ibus_err;
 
     assign d_size_ok = d_size_valid(d_size);
@@ -162,8 +162,8 @@ module biu (
     assign ibus_addr = i_addr;
 
     assign i_busy = i_req_valid && !i_rsp_done;
-    assign i_done = i_req && (!i_aligned || i_rsp_done);
-    assign i_err = i_req && (!i_aligned || (i_req_valid && ibus_err));
+    assign i_done = i_req_valid && i_rsp_done;
+    assign i_err = i_req_valid && ibus_err;
     assign i_rdata = ibus_rdata;
 
     assign dbus_cyc = d_req_valid;
