@@ -147,6 +147,18 @@ def run_cmd(cmd: List[str], label: str) -> None:
     ok(f"{label} done ({elapsed:.2f}s)")
 
 
+def run_cmd_to_file(cmd: List[str], label: str, out_path: Path) -> None:
+    shown = " ".join(shlex.quote(x) for x in cmd)
+    step(f"{label}")
+    print(style(f"  $ {shown} > {shlex.quote(str(out_path))}", Color.YELLOW))
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    start = time.perf_counter()
+    with out_path.open("w", encoding="utf-8") as fh:
+        subprocess.run(cmd, check=True, stdout=fh)
+    elapsed = time.perf_counter() - start
+    ok(f"{label} done ({elapsed:.2f}s)")
+
+
 def cmd_build(args: argparse.Namespace) -> int:
     banner("SIMULATION BUILD")
     filelist = Path(args.filelist).resolve()
@@ -211,9 +223,17 @@ def cmd_clean(args: argparse.Namespace) -> int:
     return 0
 
 
-def _incdir_to_yosys_arg(inc: str) -> str:
+def _incdir_to_sv2v_arg(inc: str) -> str:
     # "+incdir+/path" -> "-I/path"
     return "-I" + inc[len("+incdir+") :]
+
+
+def _is_package_source(src: Path) -> bool:
+    for raw in src.read_text(encoding="utf-8", errors="ignore").splitlines():
+        line = _strip_comment(raw)
+        if line.startswith("package "):
+            return True
+    return False
 
 
 def cmd_fpga(args: argparse.Namespace) -> int:
@@ -232,14 +252,38 @@ def cmd_fpga(args: argparse.Namespace) -> int:
     resolved = build_dir / "resolved_fpga.f"
     write_resolved_filelist(resolved, incdirs, sources)
 
+    sv2v_dir = build_dir / "sv2v"
+    sv2v_dir.mkdir(parents=True, exist_ok=True)
+    sv2v_inc = [_incdir_to_sv2v_arg(x) for x in incdirs]
+    package_sources = [src for src in sources if _is_package_source(src)]
+    converted_sources: List[Path] = []
+
+    for idx, src in enumerate(sources):
+        context_sources: List[Path] = []
+        seen_context: Set[Path] = set()
+        for pkg in package_sources:
+            if pkg not in seen_context:
+                context_sources.append(pkg)
+                seen_context.add(pkg)
+        if src not in seen_context:
+            context_sources.append(src)
+            seen_context.add(src)
+
+        converted = sv2v_dir / f"{idx:03d}_{src.stem}.v"
+        cmd = [args.sv2v, *sv2v_inc, *(str(x) for x in context_sources)]
+        run_cmd_to_file(cmd, f"sv2v {src.name}", converted)
+        converted_sources.append(converted)
+
+    resolved_sv2v = build_dir / "resolved_fpga_sv2v.f"
+    write_resolved_filelist(resolved_sv2v, [], converted_sources)
+
     json_path = build_dir / f"{args.top}.json"
     cfg_path = build_dir / f"{args.top}.config"
     ys_path = build_dir / f"{args.top}.ys"
 
-    yosys_inc = " ".join(shlex.quote(_incdir_to_yosys_arg(x)) for x in incdirs)
-    yosys_src = " ".join(shlex.quote(str(src)) for src in sources)
+    yosys_src = " ".join(shlex.quote(str(src)) for src in converted_sources)
     ys_body = (
-        f"read_verilog -sv {yosys_inc} {yosys_src}\n"
+        f"read_verilog {yosys_src}\n"
         f"synth_ecp5 -top {shlex.quote(args.top)} -json {shlex.quote(str(json_path))}\n"
     )
     ys_path.write_text(ys_body)
@@ -249,6 +293,8 @@ def cmd_fpga(args: argparse.Namespace) -> int:
     info(f"top: {args.top}")
     info(f"device: ECP5 {args.size} package {args.package} speed {args.speed}")
     info(f"resolved sources: {len(sources)}")
+    info(f"sv2v converted files: {len(converted_sources)}")
+    info(f"sv2v output dir: {sv2v_dir}")
 
     run_cmd([args.yosys, "-s", str(ys_path)], "yosys synth_ecp5")
 
@@ -313,6 +359,7 @@ def build_parser() -> argparse.ArgumentParser:
     pf.add_argument("--speed", default="8")
     pf.add_argument("--freq", default="25")
     pf.add_argument("--yosys", default="yosys")
+    pf.add_argument("--sv2v", default="sv2v")
     pf.add_argument("--nextpnr", default="nextpnr-ecp5")
     pf.add_argument("--ecppack", default="ecppack")
     pf.add_argument("--bit", required=True)

@@ -2,6 +2,7 @@ PYTHON ?= python3
 IVERILOG ?= iverilog
 VVP ?= vvp
 YOSYS ?= yosys
+SV2V ?= sv2v
 NEXTPNR ?= nextpnr-ecp5
 ECPPACK ?= ecppack
 
@@ -107,6 +108,7 @@ help:
 	@printf "  FPGA_FILELIST=$(FPGA_FILELIST)\n"
 	@printf "  LPF=$(LPF)\n"
 	@printf "  ECP5_SIZE=$(ECP5_SIZE) ECP5_PACKAGE=$(ECP5_PACKAGE) ECP5_SPEED=$(ECP5_SPEED)\n"
+	@printf "  SV2V=$(SV2V) YOSYS=$(YOSYS) NEXTPNR=$(NEXTPNR) ECPPACK=$(ECPPACK)\n"
 
 check-sim:
 	@command -v $(PYTHON) >/dev/null
@@ -115,6 +117,7 @@ check-sim:
 
 check-fpga:
 	@command -v $(PYTHON) >/dev/null
+	@command -v $(SV2V) >/dev/null
 	@command -v $(YOSYS) >/dev/null
 	@command -v $(NEXTPNR) >/dev/null
 	@command -v $(ECPPACK) >/dev/null
@@ -308,6 +311,7 @@ fpga: check-fpga dirs
 		--speed $(ECP5_SPEED) \
 		--freq $(ECP5_FREQ) \
 		--yosys $(YOSYS) \
+		--sv2v $(SV2V) \
 		--nextpnr $(NEXTPNR) \
 		--ecppack $(ECPPACK) \
 		--bit $(BITSTREAM)
