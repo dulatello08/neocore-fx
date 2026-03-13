@@ -161,9 +161,11 @@ module biu (
     assign ibus_stb = i_req_valid;
     assign ibus_addr = i_addr;
 
+    // Response must not be gated by the current request level; IF2 may be
+    // stalled when the one-cycle memory reply returns.
     assign i_busy = i_req_valid && !i_rsp_done;
-    assign i_done = i_req_valid && i_rsp_done;
-    assign i_err = i_req_valid && ibus_err;
+    assign i_done = i_rsp_done;
+    assign i_err = ibus_err;
     assign i_rdata = ibus_rdata;
 
     assign dbus_cyc = d_req_valid;

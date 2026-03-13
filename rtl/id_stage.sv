@@ -104,19 +104,17 @@ module id_stage
     logic is_halt_d;
     logic illegal_d;
 
-    logic rs1_hazard_d;
-    logic rs2_hazard_d;
+    assign class_d = if2_inst_i[31:28];
+    assign op_d = if2_inst_i[27:24];
+    assign rd_d = if2_inst_i[23:20];
+    assign rs1_d = if2_inst_i[19:16];
+    assign rs2_d = if2_inst_i[15:12];
+    assign ext12_d = if2_inst_i[11:0];
+    assign imm16_d = if2_inst_i[15:0];
+    assign imm16_split_d = {if2_inst_i[23:20], if2_inst_i[11:0]};
+    assign off20_d = if2_inst_i[19:0];
 
     always_comb begin
-        class_d = if2_inst_i[31:28];
-        op_d = if2_inst_i[27:24];
-        rd_d = if2_inst_i[23:20];
-        rs1_d = if2_inst_i[19:16];
-        rs2_d = if2_inst_i[15:12];
-        ext12_d = if2_inst_i[11:0];
-        imm16_d = if2_inst_i[15:0];
-        imm16_split_d = {if2_inst_i[23:20], if2_inst_i[11:0]};
-        off20_d = if2_inst_i[19:0];
 
         rf_rs1_addr_o = rs1_d;
         rf_rs2_addr_o = rs2_d;
@@ -322,30 +320,19 @@ module id_stage
                 default: illegal_d = 1'b1;
             endcase
         end
+    end
 
-        if (illegal_d) begin
-            reg_write_d = 1'b0;
-            mem_read_d = 1'b0;
-            mem_write_d = 1'b0;
-            branch_type_d = BR_NONE;
-            is_jal_d = 1'b0;
-            is_jalr_d = 1'b0;
-            is_lui_d = 1'b0;
-            is_lpc_d = 1'b0;
-            is_halt_d = 1'b0;
-        end
-
-        rs1_hazard_d = rs1_used_d && (exe_rd_i == rs1_d);
-        rs2_hazard_d = rs2_used_d && (exe_rd_i == rs2_d);
-
-        load_use_stall_o = if2_valid_i
+    always_comb begin
+        load_use_stall_o = !illegal_d
+                        && if2_valid_i
                         && exe_valid_i
                         && exe_mem_read_i
                         && (exe_rd_i != 4'h0)
-                        && (rs1_hazard_d || rs2_hazard_d);
+                        && ((rs1_used_d && (exe_rd_i == rs1_d))
+                         || (rs2_used_d && (exe_rd_i == rs2_d)));
 
         fwd_rs1_sel_d = FWD_NONE;
-        if (rs1_used_d && (rs1_d != 4'h0)) begin
+        if (!illegal_d && rs1_used_d && (rs1_d != 4'h0)) begin
             if (exe_valid_i && exe_reg_write_i && !exe_mem_read_i
              && (exe_rd_i == rs1_d) && (exe_rd_i != 4'h0)) begin
                 fwd_rs1_sel_d = FWD_MEM;
@@ -356,7 +343,7 @@ module id_stage
         end
 
         fwd_rs2_sel_d = FWD_NONE;
-        if (rs2_used_d && (rs2_d != 4'h0)) begin
+        if (!illegal_d && rs2_used_d && (rs2_d != 4'h0)) begin
             if (exe_valid_i && exe_reg_write_i && !exe_mem_read_i
              && (exe_rd_i == rs2_d) && (exe_rd_i != 4'h0)) begin
                 fwd_rs2_sel_d = FWD_MEM;
@@ -461,17 +448,17 @@ module id_stage
                 idex_imm_o           <= imm_d;
                 idex_alu_op_o        <= alu_op_d;
                 idex_alu_src_imm_o   <= alu_src_imm_d;
-                idex_mem_read_o      <= mem_read_d;
-                idex_mem_write_o     <= mem_write_d;
+                idex_mem_read_o      <= mem_read_d && !illegal_d;
+                idex_mem_write_o     <= mem_write_d && !illegal_d;
                 idex_mem_size_o      <= mem_size_d;
                 idex_load_sign_ext_o <= load_sign_ext_d;
-                idex_reg_write_o     <= reg_write_d;
-                idex_branch_type_o   <= branch_type_d;
-                idex_is_jal_o        <= is_jal_d;
-                idex_is_jalr_o       <= is_jalr_d;
-                idex_is_lui_o        <= is_lui_d;
-                idex_is_lpc_o        <= is_lpc_d;
-                idex_is_halt_o       <= is_halt_d;
+                idex_reg_write_o     <= reg_write_d && !illegal_d;
+                idex_branch_type_o   <= illegal_d ? BR_NONE : branch_type_d;
+                idex_is_jal_o        <= is_jal_d && !illegal_d;
+                idex_is_jalr_o       <= is_jalr_d && !illegal_d;
+                idex_is_lui_o        <= is_lui_d && !illegal_d;
+                idex_is_lpc_o        <= is_lpc_d && !illegal_d;
+                idex_is_halt_o       <= is_halt_d && !illegal_d;
                 idex_pred_taken_o    <= if2_pred_taken_i;
                 idex_fetch_fault_o   <= if2_fetch_fault_i;
                 idex_fwd_rs1_sel_o   <= fwd_rs1_sel_d;

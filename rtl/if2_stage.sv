@@ -42,23 +42,53 @@ module if2_stage
     logic [15:0] off16_f;
     logic [19:0] off20_f;
 
+    logic        resp_valid_live;
+    logic [31:0] resp_pc_live;
+    logic [31:0] resp_inst_live;
+    logic        resp_pred_taken_live;
+    logic        resp_err_live;
+
+    logic        resp_pending_q;
+    logic [31:0] resp_pending_pc_q;
+    logic [31:0] resp_pending_inst_q;
+    logic        resp_pending_pred_taken_q;
+    logic        resp_pending_err_q;
+
+    logic        resp_valid_d;
+    logic [31:0] resp_pc_d;
+    logic [31:0] resp_inst_d;
+    logic        resp_pred_taken_d;
+    logic        resp_err_d;
+
     logic [31:0] branch_target_f;
     logic [31:0] jal_target_f;
 
+    assign resp_valid_live = if1_valid_i && i_done_i;
+    assign resp_pc_live = if1_pc_i;
+    assign resp_inst_live = i_rdata_i;
+    assign resp_pred_taken_live = if1_pred_taken_i;
+    assign resp_err_live = i_err_i;
+
+    assign resp_valid_d = resp_pending_q ? 1'b1 : resp_valid_live;
+    assign resp_pc_d = resp_pending_q ? resp_pending_pc_q : resp_pc_live;
+    assign resp_inst_d = resp_pending_q ? resp_pending_inst_q : resp_inst_live;
+    assign resp_pred_taken_d = resp_pending_q ? resp_pending_pred_taken_q : resp_pred_taken_live;
+    assign resp_err_d = resp_pending_q ? resp_pending_err_q : resp_err_live;
+
+    assign class_f = resp_inst_d[31:28];
+    assign op_f = resp_inst_d[27:24];
+    assign off16_f = {resp_inst_d[23:20], resp_inst_d[11:0]};
+    assign off20_f = resp_inst_d[19:0];
+
+    assign branch_target_f = resp_pc_d + sext16_shift2(off16_f);
+    assign jal_target_f = resp_pc_d + sext20_shift2(off20_f);
+
     always_comb begin
-        class_f = i_rdata_i[31:28];
-        op_f = i_rdata_i[27:24];
-        off16_f = {i_rdata_i[23:20], i_rdata_i[11:0]};
-        off20_f = i_rdata_i[19:0];
-
-        branch_target_f = if1_pc_i + sext16_shift2(off16_f);
-        jal_target_f = if1_pc_i + sext20_shift2(off20_f);
-
         pred_valid_o = 1'b0;
         pred_taken_o = 1'b0;
         pred_target_o = 32'h0000_0000;
 
-        if (!stall_i && !flush_i && if1_valid_i && i_done_i && !i_err_i) begin
+        if (!stall_i && !flush_i && resp_valid_d && !resp_err_d) begin
             if (class_f == 4'h4) begin
                 case (op_f)
                     4'h0: begin
@@ -92,25 +122,47 @@ module if2_stage
             id_inst_o        <= 32'h0000_0000;
             id_pred_taken_o  <= 1'b0;
             id_fetch_fault_o <= 1'b0;
+            resp_pending_q   <= 1'b0;
+            resp_pending_pc_q <= 32'h0000_0000;
+            resp_pending_inst_q <= 32'h0000_0000;
+            resp_pending_pred_taken_q <= 1'b0;
+            resp_pending_err_q <= 1'b0;
         end else if (flush_i) begin
             id_valid_o       <= 1'b0;
             id_pc_o          <= 32'h0000_0000;
             id_inst_o        <= 32'h0000_0000;
             id_pred_taken_o  <= 1'b0;
             id_fetch_fault_o <= 1'b0;
+            resp_pending_q   <= 1'b0;
+            resp_pending_pc_q <= 32'h0000_0000;
+            resp_pending_inst_q <= 32'h0000_0000;
+            resp_pending_pred_taken_q <= 1'b0;
+            resp_pending_err_q <= 1'b0;
+        end else if (stall_i) begin
+            if (!resp_pending_q && resp_valid_live) begin
+                resp_pending_q <= 1'b1;
+                resp_pending_pc_q <= resp_pc_live;
+                resp_pending_inst_q <= resp_inst_live;
+                resp_pending_pred_taken_q <= resp_pred_taken_live;
+                resp_pending_err_q <= resp_err_live;
+            end
         end else if (!stall_i) begin
-            if (if1_valid_i && i_done_i) begin
+            if (resp_valid_d) begin
                 id_valid_o       <= 1'b1;
-                id_pc_o          <= if1_pc_i;
-                id_inst_o        <= i_rdata_i;
-                id_pred_taken_o  <= if1_pred_taken_i;
-                id_fetch_fault_o <= i_err_i;
+                id_pc_o          <= resp_pc_d;
+                id_inst_o        <= resp_inst_d;
+                id_pred_taken_o  <= resp_pred_taken_d;
+                id_fetch_fault_o <= resp_err_d;
             end else begin
                 id_valid_o       <= 1'b0;
                 id_pc_o          <= 32'h0000_0000;
                 id_inst_o        <= 32'h0000_0000;
                 id_pred_taken_o  <= 1'b0;
                 id_fetch_fault_o <= 1'b0;
+            end
+
+            if (resp_pending_q) begin
+                resp_pending_q <= 1'b0;
             end
         end
     end
