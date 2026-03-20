@@ -168,7 +168,9 @@ module mem_stage
     assign d_addr_o = xact_addr;
     assign d_wdata_o = xact_store_data;
 
-    assign stall_req_o = xact_valid && !d_done_i;
+    // A newly launched request cannot complete in the same cycle as launch;
+    // treat completion only when an older request is pending.
+    assign stall_req_o = launch_req || (pending_q && !d_done_i);
 
     always_ff @(posedge clk) begin
         if (rst) begin
@@ -231,34 +233,19 @@ module mem_stage
                     memwb_is_halt_o      <= pend_is_halt_q;
                 end
             end else if (launch_req) begin
-                if (d_done_i) begin
-                    memwb_valid_o        <= exe_valid_i;
-                    memwb_rd_o           <= exe_rd_i;
-                    memwb_reg_write_o    <= exe_reg_write_i;
-                    memwb_data_o         <= exe_mem_read_i
-                                           ? load_extract(d_rdata_i, exe_mem_size_i,
-                                                          exe_result_i[1:0],
-                                                          exe_load_sign_ext_i)
-                                           : exe_result_i;
-                    memwb_mem_fault_o    <= d_err_i;
-                    memwb_fetch_fault_o  <= exe_fetch_fault_i;
-                    memwb_illegal_o      <= exe_illegal_i;
-                    memwb_is_halt_o      <= exe_is_halt_i;
-                end else begin
-                    pending_q            <= 1'b1;
-                    pend_valid_q         <= exe_valid_i;
-                    pend_rd_q            <= exe_rd_i;
-                    pend_reg_write_q     <= exe_reg_write_i;
-                    pend_mem_read_q      <= exe_mem_read_i;
-                    pend_mem_size_q      <= exe_mem_size_i;
-                    pend_load_sign_ext_q <= exe_load_sign_ext_i;
-                    pend_addr_q          <= exe_result_i;
-                    pend_store_data_q    <= launch_store_data;
-                    pend_result_q        <= exe_result_i;
-                    pend_fetch_fault_q   <= exe_fetch_fault_i;
-                    pend_illegal_q       <= exe_illegal_i;
-                    pend_is_halt_q       <= exe_is_halt_i;
-                end
+                pending_q            <= 1'b1;
+                pend_valid_q         <= exe_valid_i;
+                pend_rd_q            <= exe_rd_i;
+                pend_reg_write_q     <= exe_reg_write_i;
+                pend_mem_read_q      <= exe_mem_read_i;
+                pend_mem_size_q      <= exe_mem_size_i;
+                pend_load_sign_ext_q <= exe_load_sign_ext_i;
+                pend_addr_q          <= exe_result_i;
+                pend_store_data_q    <= launch_store_data;
+                pend_result_q        <= exe_result_i;
+                pend_fetch_fault_q   <= exe_fetch_fault_i;
+                pend_illegal_q       <= exe_illegal_i;
+                pend_is_halt_q       <= exe_is_halt_i;
             end else if (!stall_i) begin
                 memwb_valid_o       <= exe_valid_i;
                 memwb_rd_o          <= exe_rd_i;

@@ -33,9 +33,7 @@ The NeoCore-FX / NeoCore16x32 toolchain is licensed separately under GPL-3.0.
 │   ├── sim_pipe.f
 │   └── fpga.f
 ├── mem/
-│   ├── test_smoke.hex
-│   ├── test_halt.hex
-│   ├── test_forwarding_hazard.hex
+│   ├── *.hex (test_smoke.hex, test_halt.hex, coremark.hex, etc.)
 │   └── README.md
 ├── rtl/
 │   ├── core_pkg.sv

@@ -9,7 +9,7 @@
 
 module tb_core_any;
   localparam int CLK_HALF_PERIOD_NS = 5;
-  localparam int MAX_CYCLES_DEFAULT = 300000;
+  localparam int MAX_CYCLES_DEFAULT = 1000000;
 
   // ==========================================================================
   // Testbench signals

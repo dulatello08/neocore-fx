@@ -45,34 +45,31 @@ module if2_stage
     logic        resp_valid_live;
     logic [31:0] resp_pc_live;
     logic [31:0] resp_inst_live;
-    logic        resp_pred_taken_live;
     logic        resp_err_live;
 
     logic        resp_pending_q;
     logic [31:0] resp_pending_pc_q;
     logic [31:0] resp_pending_inst_q;
-    logic        resp_pending_pred_taken_q;
     logic        resp_pending_err_q;
 
     logic        resp_valid_d;
     logic [31:0] resp_pc_d;
     logic [31:0] resp_inst_d;
-    logic        resp_pred_taken_d;
     logic        resp_err_d;
 
+    logic        pred_for_inst_valid_d;
+    logic        pred_for_inst_taken_d;
     logic [31:0] branch_target_f;
     logic [31:0] jal_target_f;
 
     assign resp_valid_live = if1_valid_i && i_done_i;
     assign resp_pc_live = if1_pc_i;
     assign resp_inst_live = i_rdata_i;
-    assign resp_pred_taken_live = if1_pred_taken_i;
     assign resp_err_live = i_err_i;
 
     assign resp_valid_d = resp_pending_q ? 1'b1 : resp_valid_live;
     assign resp_pc_d = resp_pending_q ? resp_pending_pc_q : resp_pc_live;
     assign resp_inst_d = resp_pending_q ? resp_pending_inst_q : resp_inst_live;
-    assign resp_pred_taken_d = resp_pending_q ? resp_pending_pred_taken_q : resp_pred_taken_live;
     assign resp_err_d = resp_pending_q ? resp_pending_err_q : resp_err_live;
 
     assign class_f = resp_inst_d[31:28];
@@ -84,34 +81,39 @@ module if2_stage
     assign jal_target_f = resp_pc_d + sext20_shift2(off20_f);
 
     always_comb begin
+        pred_for_inst_valid_d = 1'b0;
+        pred_for_inst_taken_d = 1'b0;
+
         pred_valid_o = 1'b0;
         pred_taken_o = 1'b0;
         pred_target_o = 32'h0000_0000;
 
-        if (!stall_i && !flush_i && resp_valid_d && !resp_err_d) begin
+        if (resp_valid_d && !resp_err_d) begin
             if (class_f == 4'h4) begin
                 case (op_f)
                     4'h0: begin
-                        pred_valid_o = 1'b1;
-                        pred_taken_o = 1'b1;
+                        pred_for_inst_valid_d = 1'b1;
+                        pred_for_inst_taken_d = 1'b1;
                         pred_target_o = branch_target_f;
                     end
                     4'h1, 4'h2, 4'h3, 4'h4: begin
-                        pred_valid_o = 1'b1;
-                        pred_taken_o = off16_f[15];
+                        pred_for_inst_valid_d = 1'b1;
+                        pred_for_inst_taken_d = off16_f[15];
                         pred_target_o = branch_target_f;
                     end
-                    default: begin
-                        pred_valid_o = 1'b0;
-                        pred_taken_o = 1'b0;
-                        pred_target_o = 32'h0000_0000;
-                    end
+                    default: begin end
                 endcase
             end else if ((class_f == 4'h5) && (op_f == 4'h0)) begin
-                pred_valid_o = 1'b1;
-                pred_taken_o = 1'b1;
+                pred_for_inst_valid_d = 1'b1;
+                pred_for_inst_taken_d = 1'b1;
                 pred_target_o = jal_target_f;
             end
+        end
+
+        pred_valid_o = !stall_i && !flush_i && pred_for_inst_valid_d;
+        pred_taken_o = pred_valid_o && pred_for_inst_taken_d;
+        if (!pred_valid_o) begin
+            pred_target_o = 32'h0000_0000;
         end
     end
 
@@ -125,7 +127,6 @@ module if2_stage
             resp_pending_q   <= 1'b0;
             resp_pending_pc_q <= 32'h0000_0000;
             resp_pending_inst_q <= 32'h0000_0000;
-            resp_pending_pred_taken_q <= 1'b0;
             resp_pending_err_q <= 1'b0;
         end else if (flush_i) begin
             id_valid_o       <= 1'b0;
@@ -136,14 +137,12 @@ module if2_stage
             resp_pending_q   <= 1'b0;
             resp_pending_pc_q <= 32'h0000_0000;
             resp_pending_inst_q <= 32'h0000_0000;
-            resp_pending_pred_taken_q <= 1'b0;
             resp_pending_err_q <= 1'b0;
         end else if (stall_i) begin
             if (!resp_pending_q && resp_valid_live) begin
                 resp_pending_q <= 1'b1;
                 resp_pending_pc_q <= resp_pc_live;
                 resp_pending_inst_q <= resp_inst_live;
-                resp_pending_pred_taken_q <= resp_pred_taken_live;
                 resp_pending_err_q <= resp_err_live;
             end
         end else if (!stall_i) begin
@@ -151,7 +150,7 @@ module if2_stage
                 id_valid_o       <= 1'b1;
                 id_pc_o          <= resp_pc_d;
                 id_inst_o        <= resp_inst_d;
-                id_pred_taken_o  <= resp_pred_taken_d;
+                id_pred_taken_o  <= pred_for_inst_valid_d && pred_for_inst_taken_d;
                 id_fetch_fault_o <= resp_err_d;
             end else begin
                 id_valid_o       <= 1'b0;
@@ -166,4 +165,7 @@ module if2_stage
             end
         end
     end
+
+    logic unused_if1_pred_taken;
+    assign unused_if1_pred_taken = if1_pred_taken_i;
 endmodule

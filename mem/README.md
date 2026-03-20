@@ -16,6 +16,11 @@ Byte-per-line memory images for `tb_core_any.sv` (`+PROGRAM=<path>`).
 - `test_smoke.hex`: ALU chain + halt (`B .`).
 - `test_halt.hex`: immediate halt at reset PC.
 - `test_forwarding_hazard.hex`: stale WB-forward regression program.
+- `test_addg.hex`: Simple arithmetic testing addg.
+- `test_fib.hex`: Fibonacci sequence generator.
+- `test.hex`: General regression test sequence.
+- `coremark.hex`: CoreMark benchmark program.
+- `dhrystone.hex`: Dhrystone benchmark program.
 
 ## Usage
 
