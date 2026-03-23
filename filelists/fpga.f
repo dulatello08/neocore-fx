@@ -8,6 +8,8 @@
 ../rtl/mem_stage.sv
 ../rtl/wb_stage.sv
 ../rtl/biu.sv
+../rtl/mem_bram.sv
+../rtl/uart_mmio.sv
 ../rtl/mem.sv
 ../rtl/neocorefx_core.sv
 ../rtl/neocorefx_top.sv

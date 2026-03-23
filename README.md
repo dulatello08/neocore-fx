@@ -89,7 +89,22 @@ make run_any PROGRAM=mem/test_forwarding_hazard.hex
 make profile_any PROGRAM=mem/test_smoke.hex
 make debug_any PROGRAM=mem/test_smoke.hex
 make waves_any PROGRAM=mem/test_smoke.hex
+make run_any PROGRAM=mem/coremark.hex VVP_ARGS=+UART_STDOUT
 ```
+
+## UART MMIO (Phase 2)
+
+Implemented D-Bus MMIO decode includes UART at `0x4000_0000`.
+
+- `0x4000_0000` `TXDATA` (W): write byte to TX FIFO.
+- `0x4000_0004` `RXDATA` (R/W): read received byte, or inject RX byte in simulation.
+- `0x4000_0008` `STATUS` (R/W1C): bit0 `TX_READY`, bit1 `RX_VALID`, bit2 `TX_OVERRUN`, bit3 `RX_OVERRUN`.
+- `0x4000_000C` `CTRL` (R/W): bit0 `TX_EN`, bit1 `RX_EN`.
+- `0x4000_0010` `BAUDDIV` (R/W): UART bit-period divider.
+- `TXDATA` applies backpressure: if TX FIFO is full, the write is stalled until space is available (no byte drop).
+- Reset `BAUDDIV` defaults: synth/hardware `217` (25 MHz / 115200), simulation `8` for faster log throughput.
+
+For simulation logging, pass `+UART_STDOUT` (via `VVP_ARGS`) to mirror transmitted bytes to console.
 
 One-command generic loader helper:
 

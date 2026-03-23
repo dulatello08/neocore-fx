@@ -13,8 +13,30 @@ package mem_pkg;
     localparam logic [31:0] MEM_BASE_ADDR  = 32'h0000_0000;
     localparam logic [31:0] MEM_LAST_ADDR  = MEM_BASE_ADDR + MEM_BYTES - 1;
 
+    localparam logic [31:0] MMIO_BASE_ADDR = 32'h4000_0000;
+    localparam int unsigned MMIO_BYTES     = 4 * 1024;
+    localparam logic [31:0] MMIO_LAST_ADDR = MMIO_BASE_ADDR + MMIO_BYTES - 1;
+
+    localparam logic [31:0] UART_BASE_ADDR = MMIO_BASE_ADDR;
+    localparam int unsigned UART_BYTES     = 256;
+    localparam logic [31:0] UART_LAST_ADDR = UART_BASE_ADDR + UART_BYTES - 1;
+
+    localparam logic [7:0] UART_TXDATA_OFFSET  = 8'h00;
+    localparam logic [7:0] UART_RXDATA_OFFSET  = 8'h04;
+    localparam logic [7:0] UART_STATUS_OFFSET  = 8'h08;
+    localparam logic [7:0] UART_CTRL_OFFSET    = 8'h0C;
+    localparam logic [7:0] UART_BAUDDIV_OFFSET = 8'h10;
+
     function automatic logic mem_addr_in_range(input logic [31:0] addr);
         return (addr >= MEM_BASE_ADDR) && (addr <= MEM_LAST_ADDR);
+    endfunction
+
+    function automatic logic mmio_addr_in_range(input logic [31:0] addr);
+        return (addr >= MMIO_BASE_ADDR) && (addr <= MMIO_LAST_ADDR);
+    endfunction
+
+    function automatic logic uart_addr_in_range(input logic [31:0] addr);
+        return (addr >= UART_BASE_ADDR) && (addr <= UART_LAST_ADDR);
     endfunction
 
     function automatic logic [13:0] mem_word_index(input logic [31:0] addr);

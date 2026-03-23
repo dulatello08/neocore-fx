@@ -25,6 +25,7 @@ module neocorefx_fpga_top (
   logic wb_fault;
 
   logic [24:0] heartbeat;
+  logic uart_tx_unused;
 
   // Keep a free-running heartbeat separate from core status.
   always_ff @(posedge clk_25mhz) begin
@@ -34,6 +35,8 @@ module neocorefx_fpga_top (
   neocorefx_top u_soc (
     .clk                    (clk_25mhz),
     .rst_btn_n              (btn[0]),
+    .uart_rx_i              (1'b1),
+    .uart_tx_o              (uart_tx_unused),
     .en                     (1'b1),
     .count                  (status_count),
     .halted_o               (halted),

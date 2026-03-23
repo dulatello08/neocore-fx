@@ -7,6 +7,8 @@ module neocorefx_top (
   // Clock/reset controls.
   input  logic       clk,
   input  logic       rst_btn_n,
+  input  logic       uart_rx_i,
+  output logic       uart_tx_o,
 
   // External run enable.
   input  logic       en,
@@ -183,7 +185,9 @@ module neocorefx_top (
     .dbus_sel               (dbus_sel),
     .dbus_ack               (dbus_ack),
     .dbus_rdata             (dbus_rdata),
-    .dbus_err               (dbus_err)
+    .dbus_err               (dbus_err),
+    .uart_rx_i              (uart_rx_i),
+    .uart_tx_o              (uart_tx_o)
   );
 
   // ============================================================================

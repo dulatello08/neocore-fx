@@ -50,6 +50,7 @@ This is the central entry point for project documentation.
 - [docs/relocations.md](docs/relocations.md): relocation behavior and assumptions.
 - [docs/far-branching.md](docs/far-branching.md): long-range branch strategy.
 - [docs/bus-architecture.md](docs/bus-architecture.md): BIU/memory bus integration notes.
+- [docs/uart_mmio.h](docs/uart_mmio.h): UART MMIO register definitions and polling helpers.
 - [docs/exceptions-future.md](docs/exceptions-future.md): planned exception model.
 
 ### Directory Guides

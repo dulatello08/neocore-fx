@@ -1,6 +1,6 @@
 //
 // mem.sv
-// NeoCoreFX - Simple dual-port BRAM model
+// NeoCoreFX - Memory subsystem fabric (BRAM + MMIO UART)
 //
 
 module mem (
@@ -25,126 +25,101 @@ module mem (
     input  logic [3:0]  dbus_sel,
     output logic        dbus_ack,
     output logic [31:0] dbus_rdata,
-    output logic        dbus_err
+    output logic        dbus_err,
+
+    // SoC UART pins.
+    input  logic        uart_rx_i,
+    output logic        uart_tx_o
 );
     timeunit 1ns;
     timeprecision 1ps;
 
     import mem_pkg::*;
 
-    localparam int unsigned BANKS = 4;
-    localparam int unsigned BANK_DEPTH = MEM_WORDS / BANKS;
-    localparam int unsigned BANK_ADDR_W = $clog2(BANK_DEPTH);
-
-    // -------------------------------------------------------------------------
-    // Address decode
-    // -------------------------------------------------------------------------
-    logic ibus_valid;
     logic dbus_valid;
-    logic ibus_in_range;
-    logic dbus_in_range;
-    logic ibus_aligned;
+    logic d_sel_bram;
+    logic d_sel_uart;
+    logic d_decode_err;
 
-    logic [13:0] ibus_word_idx;
-    logic [13:0] dbus_word_idx;
-    logic [1:0]  ibus_bank_sel;
-    logic [1:0]  dbus_bank_sel;
-    logic [BANK_ADDR_W-1:0] ibus_row_addr;
-    logic [BANK_ADDR_W-1:0] dbus_row_addr;
+    logic        bram_dbus_cyc;
+    logic        bram_dbus_stb;
+    logic        bram_dbus_ack;
+    logic [31:0] bram_dbus_rdata;
+    logic        bram_dbus_err;
 
-    assign ibus_valid    = ibus_cyc & ibus_stb;
-    assign dbus_valid    = dbus_cyc & dbus_stb;
-    assign ibus_in_range = mem_addr_in_range(ibus_addr);
-    assign dbus_in_range = mem_addr_in_range(dbus_addr);
-    assign ibus_aligned  = (ibus_addr[1:0] == 2'b00);
+    logic        uart_req;
+    logic        uart_ack;
+    logic [31:0] uart_rdata;
+    logic        uart_err;
 
-    assign ibus_word_idx = mem_word_index(ibus_addr);
-    assign dbus_word_idx = mem_word_index(dbus_addr);
+    logic d_decode_err_q;
 
-    assign ibus_bank_sel = ibus_word_idx[1:0];
-    assign dbus_bank_sel = dbus_word_idx[1:0];
-    assign ibus_row_addr = ibus_word_idx[13:2];
-    assign dbus_row_addr = dbus_word_idx[13:2];
+    assign dbus_valid = dbus_cyc & dbus_stb;
+    assign d_sel_bram = dbus_valid && mem_addr_in_range(dbus_addr);
+    assign d_sel_uart = dbus_valid && uart_addr_in_range(dbus_addr);
+    assign d_decode_err = dbus_valid && !d_sel_bram && !d_sel_uart;
 
-    // -------------------------------------------------------------------------
-    // BRAM banks
-    // Mirrors cpu-private structure: each bank is a true dual-port 32-bit RAM.
-    // -------------------------------------------------------------------------
-    logic [31:0] ibus_bank_rdata [0:BANKS-1];
-    logic [31:0] dbus_bank_rdata [0:BANKS-1];
-    logic [3:0]  dbus_bank_be [0:BANKS-1];
-    logic [1:0]  ibus_bank_sel_reg;
-    logic [1:0]  dbus_bank_sel_reg;
+    assign bram_dbus_cyc = d_sel_bram;
+    assign bram_dbus_stb = d_sel_bram;
+    assign uart_req = d_sel_uart;
 
-    always_comb begin
-        for (int i = 0; i < BANKS; i++) begin
-            dbus_bank_be[i] = 4'b0000;
-        end
-        if (dbus_valid && dbus_in_range && dbus_we) begin
-            dbus_bank_be[dbus_bank_sel] = dbus_sel;
+    mem_bram u_bram (
+        .clk        (clk),
+        .rst        (rst),
+        .ibus_cyc   (ibus_cyc),
+        .ibus_stb   (ibus_stb),
+        .ibus_addr  (ibus_addr),
+        .ibus_ack   (ibus_ack),
+        .ibus_rdata (ibus_rdata),
+        .ibus_err   (ibus_err),
+        .dbus_cyc   (bram_dbus_cyc),
+        .dbus_stb   (bram_dbus_stb),
+        .dbus_we    (dbus_we),
+        .dbus_addr  (dbus_addr),
+        .dbus_wdata (dbus_wdata),
+        .dbus_sel   (dbus_sel),
+        .dbus_ack   (bram_dbus_ack),
+        .dbus_rdata (bram_dbus_rdata),
+        .dbus_err   (bram_dbus_err)
+    );
+
+    uart_mmio u_uart (
+        .clk        (clk),
+        .rst        (rst),
+        .req_i      (uart_req),
+        .we_i       (dbus_we),
+        .addr_i     (dbus_addr),
+        .wdata_i    (dbus_wdata),
+        .sel_i      (dbus_sel),
+        .ack_o      (uart_ack),
+        .rdata_o    (uart_rdata),
+        .err_o      (uart_err),
+        .uart_rx_i  (uart_rx_i),
+        .uart_tx_o  (uart_tx_o)
+    );
+
+    always_ff @(posedge clk) begin
+        if (rst) begin
+            d_decode_err_q <= 1'b0;
+        end else begin
+            d_decode_err_q <= d_decode_err;
         end
     end
 
-    generate
-        for (genvar i = 0; i < BANKS; i++) begin : bank_gen
-            (* ram_style = "block" *) logic [31:0] mem [0:BANK_DEPTH-1];
-            logic [31:0] rdata_a;
-            logic [31:0] rdata_b;
+    // D-Bus response mux with one-cycle decode-error pulse.
+    always_comb begin
+        dbus_ack = 1'b0;
+        dbus_err = 1'b0;
+        dbus_rdata = 32'h0000_0000;
 
-            // Port A: instruction fetch (read-only)
-            always_ff @(posedge clk) begin
-                rdata_a <= mem[ibus_row_addr];
-            end
-
-            // Port B: data access (read/write with byte-lane enables)
-            always_ff @(posedge clk) begin
-                if (dbus_bank_be[i][3]) mem[dbus_row_addr][31:24] <= dbus_wdata[31:24];
-                if (dbus_bank_be[i][2]) mem[dbus_row_addr][23:16] <= dbus_wdata[23:16];
-                if (dbus_bank_be[i][1]) mem[dbus_row_addr][15:8]  <= dbus_wdata[15:8];
-                if (dbus_bank_be[i][0]) mem[dbus_row_addr][7:0]   <= dbus_wdata[7:0];
-                rdata_b <= mem[dbus_row_addr];
-            end
-
-            assign ibus_bank_rdata[i] = rdata_a;
-            assign dbus_bank_rdata[i] = rdata_b;
-
-`ifndef SYNTHESIS
-            initial begin : init_bank_mem
-                int unsigned j;
-                for (j = 0; j < BANK_DEPTH; j = j + 1) begin
-                    mem[j] = 32'h0000_0000;
-                end
-            end
-`endif
-        end
-    endgenerate
-
-    assign ibus_rdata = ibus_bank_rdata[ibus_bank_sel_reg];
-    assign dbus_rdata = dbus_bank_rdata[dbus_bank_sel_reg];
-
-    // -------------------------------------------------------------------------
-    // Request/response pipelining
-    // -------------------------------------------------------------------------
-    always_ff @(posedge clk) begin
-        if (rst) begin
-            ibus_ack       <= 1'b0;
-            ibus_err       <= 1'b0;
-            ibus_bank_sel_reg <= 2'b00;
-            dbus_ack   <= 1'b0;
-            dbus_err   <= 1'b0;
-            dbus_bank_sel_reg <= 2'b00;
-        end else begin
-            ibus_ack <= ibus_valid && ibus_in_range && ibus_aligned;
-            ibus_err <= ibus_valid && (!ibus_in_range || !ibus_aligned);
-            if (ibus_valid && ibus_in_range && ibus_aligned) begin
-                ibus_bank_sel_reg <= ibus_bank_sel;
-            end
-
-            dbus_ack <= dbus_valid && dbus_in_range;
-            dbus_err <= dbus_valid && !dbus_in_range;
-            if (dbus_valid && dbus_in_range) begin
-                dbus_bank_sel_reg <= dbus_bank_sel;
-            end
+        if (bram_dbus_ack) begin
+            dbus_ack = 1'b1;
+            dbus_rdata = bram_dbus_rdata;
+        end else if (uart_ack) begin
+            dbus_ack = 1'b1;
+            dbus_rdata = uart_rdata;
+        end else if (bram_dbus_err || uart_err || d_decode_err_q) begin
+            dbus_err = 1'b1;
         end
     end
 endmodule : mem

@@ -121,32 +121,6 @@ module biu (
         endcase
     endfunction
 
-    function automatic logic [31:0] d_extract_rdata(
-        input logic [31:0] word_data,
-        input logic [1:0]  size,
-        input logic [1:0]  lsb
-    );
-        case (size)
-            SIZE_BYTE: begin
-                case (lsb)
-                    2'b00: return {24'h000000, word_data[31:24]};
-                    2'b01: return {24'h000000, word_data[23:16]};
-                    2'b10: return {24'h000000, word_data[15:8]};
-                    default: return {24'h000000, word_data[7:0]};
-                endcase
-            end
-            SIZE_HALF: begin
-                case (lsb)
-                    2'b00: return {16'h0000, word_data[31:16]};
-                    2'b10: return {16'h0000, word_data[15:0]};
-                    default: return 32'h0000_0000;
-                endcase
-            end
-            SIZE_WORD: return word_data;
-            default:        return 32'h0000_0000;
-        endcase
-    endfunction
-
     // Keep I-port handshake fully synchronous with memory response to avoid
     // combinational feedback through frontend prediction logic.
     assign i_req_valid = i_req;
@@ -178,7 +152,9 @@ module biu (
     assign d_busy = d_req_valid && !d_rsp_done;
     assign d_done = d_req && (!d_size_ok || !d_aligned || d_rsp_done);
     assign d_err = d_req && ((!d_size_ok || !d_aligned) || (d_req_valid && dbus_err));
-    assign d_rdata = d_extract_rdata(dbus_rdata, d_size, d_addr[1:0]);
+    // Forward raw 32-bit word data; MEM stage performs size/byte-lane extraction
+    // and sign/zero extension exactly once.
+    assign d_rdata = dbus_rdata;
 
     logic unused_clk_rst;
     assign unused_clk_rst = clk ^ rst;

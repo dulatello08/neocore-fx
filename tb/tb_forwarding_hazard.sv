@@ -17,6 +17,7 @@ module tb_forwarding_hazard;
   logic top_rst_btn_n;
 
   logic [7:0]  count;
+  logic        uart_tx;
   logic        halted;
   logic [31:0] current_pc;
   logic [31:0] cycle_count;
@@ -36,6 +37,8 @@ module tb_forwarding_hazard;
   neocorefx_top dut (
     .clk                    (clk),
     .rst_btn_n              (top_rst_btn_n),
+    .uart_rx_i              (1'b1),
+    .uart_tx_o              (uart_tx),
     .en                     (1'b1),
     .count                  (count),
     .halted_o               (halted),
@@ -93,10 +96,10 @@ module tb_forwarding_hazard;
       row_addr = word_idx[13:2];
       byte_sel = addr[1:0];
       case (bank_sel)
-        2'b00: dut.u_mem.bank_gen[0].mem[row_addr][8*(3-byte_sel) +: 8] = data;
-        2'b01: dut.u_mem.bank_gen[1].mem[row_addr][8*(3-byte_sel) +: 8] = data;
-        2'b10: dut.u_mem.bank_gen[2].mem[row_addr][8*(3-byte_sel) +: 8] = data;
-        default: dut.u_mem.bank_gen[3].mem[row_addr][8*(3-byte_sel) +: 8] = data;
+        2'b00: dut.u_mem.u_bram.bank_gen[0].mem[row_addr][8*(3-byte_sel) +: 8] = data;
+        2'b01: dut.u_mem.u_bram.bank_gen[1].mem[row_addr][8*(3-byte_sel) +: 8] = data;
+        2'b10: dut.u_mem.u_bram.bank_gen[2].mem[row_addr][8*(3-byte_sel) +: 8] = data;
+        default: dut.u_mem.u_bram.bank_gen[3].mem[row_addr][8*(3-byte_sel) +: 8] = data;
       endcase
     end
   endtask
@@ -114,10 +117,10 @@ module tb_forwarding_hazard;
     int i;
     begin
       for (i = 0; i < 4096; i = i + 1) begin
-        dut.u_mem.bank_gen[0].mem[i] = 32'h0000_0000;
-        dut.u_mem.bank_gen[1].mem[i] = 32'h0000_0000;
-        dut.u_mem.bank_gen[2].mem[i] = 32'h0000_0000;
-        dut.u_mem.bank_gen[3].mem[i] = 32'h0000_0000;
+        dut.u_mem.u_bram.bank_gen[0].mem[i] = 32'h0000_0000;
+        dut.u_mem.u_bram.bank_gen[1].mem[i] = 32'h0000_0000;
+        dut.u_mem.u_bram.bank_gen[2].mem[i] = 32'h0000_0000;
+        dut.u_mem.u_bram.bank_gen[3].mem[i] = 32'h0000_0000;
       end
     end
   endtask
