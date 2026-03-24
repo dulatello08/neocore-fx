@@ -236,6 +236,40 @@ def _is_package_source(src: Path) -> bool:
     return False
 
 
+def _normalize_word_line(raw: str) -> str:
+    token = _strip_comment(raw).replace("_", "")
+    if not token:
+        return ""
+    if token.startswith(("0x", "0X")):
+        token = token[2:]
+    value = int(token, 16)
+    if value < 0 or value > 0xFFFF_FFFF:
+        raise ValueError(f"word out of range: {raw}")
+    return f"{value:08x}"
+
+
+def split_wordhex_banks(in_path: Path, out_prefix: Path) -> List[Path]:
+    words: List[str] = []
+    for raw in in_path.read_text(encoding="utf-8").splitlines():
+        norm = _normalize_word_line(raw)
+        if norm:
+            words.append(norm)
+
+    if len(words) % 4 != 0:
+        raise ValueError(f"word count {len(words)} is not divisible by 4 for bank split: {in_path}")
+
+    bank_lines = [[], [], [], []]
+    for idx, word in enumerate(words):
+        bank_lines[idx & 0x3].append(word)
+
+    out_paths: List[Path] = []
+    for bank_idx in range(4):
+        out_path = Path(f"{out_prefix}.bank{bank_idx}.wordhex")
+        out_path.write_text("\n".join(bank_lines[bank_idx]) + ("\n" if bank_lines[bank_idx] else ""), encoding="utf-8")
+        out_paths.append(out_path)
+    return out_paths
+
+
 def cmd_fpga(args: argparse.Namespace) -> int:
     banner("FPGA BUILD")
     filelist = Path(args.filelist).resolve()
@@ -255,8 +289,42 @@ def cmd_fpga(args: argparse.Namespace) -> int:
     sv2v_dir = build_dir / "sv2v"
     sv2v_dir.mkdir(parents=True, exist_ok=True)
     sv2v_inc = [_incdir_to_sv2v_arg(x) for x in incdirs]
+    sv2v_defs = ["-D", "SYNTHESIS"]
     package_sources = [src for src in sources if _is_package_source(src)]
     converted_sources: List[Path] = []
+
+    init_wordhex: Path | None = None
+    if args.bram_random_init and args.bram_init_wordhex:
+        raise ValueError("Use either --bram-random-init or --bram-init-wordhex, not both.")
+    if args.bram_random_init:
+        init_wordhex = build_dir / "bram_init_random.wordhex"
+        gen_cmd = [
+            args.ecpbram,
+            "-g",
+            str(init_wordhex),
+            "-w",
+            str(args.bram_width),
+            "-d",
+            str(args.bram_depth),
+        ]
+        if args.bram_random_seed:
+            gen_cmd.extend(["-s", str(args.bram_random_seed)])
+        run_cmd(gen_cmd, "ecpbram generate random init")
+    elif args.bram_init_wordhex:
+        init_wordhex = Path(args.bram_init_wordhex).resolve()
+        if not init_wordhex.exists():
+            raise FileNotFoundError(f"BRAM init image not found: {init_wordhex}")
+
+    bram_to_wordhex: Path | None = None
+    if args.bram_to_wordhex:
+        bram_to_wordhex = Path(args.bram_to_wordhex).resolve()
+        if not bram_to_wordhex.exists():
+            raise FileNotFoundError(f"BRAM replacement image not found: {bram_to_wordhex}")
+
+    if init_wordhex is not None:
+        init_bank_hexes = split_wordhex_banks(init_wordhex, build_dir / "bram_init")
+        for bank_idx, bank_hex in enumerate(init_bank_hexes):
+            sv2v_defs.extend(["-D", f'MEM_INIT_HEX_BANK{bank_idx}="{bank_hex}"'])
 
     for idx, src in enumerate(sources):
         context_sources: List[Path] = []
@@ -270,7 +338,7 @@ def cmd_fpga(args: argparse.Namespace) -> int:
             seen_context.add(src)
 
         converted = sv2v_dir / f"{idx:03d}_{src.stem}.v"
-        cmd = [args.sv2v, "-D", "SYNTHESIS", *sv2v_inc, *(str(x) for x in context_sources)]
+        cmd = [args.sv2v, *sv2v_defs, *sv2v_inc, *(str(x) for x in context_sources)]
         run_cmd_to_file(cmd, f"sv2v {src.name}", converted)
         converted_sources.append(converted)
 
@@ -295,6 +363,10 @@ def cmd_fpga(args: argparse.Namespace) -> int:
     info(f"resolved sources: {len(sources)}")
     info(f"sv2v converted files: {len(converted_sources)}")
     info(f"sv2v output dir: {sv2v_dir}")
+    if init_wordhex is not None:
+        info(f"BRAM init image: {init_wordhex}")
+    if bram_to_wordhex is not None:
+        info(f"BRAM replacement image: {bram_to_wordhex}")
 
     run_cmd([args.yosys, "-s", str(ys_path)], "yosys synth_ecp5")
 
@@ -316,7 +388,27 @@ def cmd_fpga(args: argparse.Namespace) -> int:
     ]
     run_cmd(nextpnr_cmd, "nextpnr place-and-route")
 
-    run_cmd([args.ecppack, "--compress", str(cfg_path), str(bit_path)], "ecppack bitstream")
+    cfg_for_pack = cfg_path
+    if bram_to_wordhex is not None:
+        if init_wordhex is None:
+            raise ValueError("BRAM replacement requires a known initial image. Use --bram-random-init or --bram-init-wordhex.")
+        patched_cfg = build_dir / f"{args.top}.bram.config"
+        patch_cmd = [
+            args.ecpbram,
+            "-i",
+            str(cfg_path),
+            "-o",
+            str(patched_cfg),
+            "-f",
+            str(init_wordhex),
+            "-t",
+            str(bram_to_wordhex),
+        ]
+        run_cmd(patch_cmd, "ecpbram patch BRAM image")
+        cfg_for_pack = patched_cfg
+        info(f"patched config: {patched_cfg}")
+
+    run_cmd([args.ecppack, "--compress", str(cfg_for_pack), str(bit_path)], "ecppack bitstream")
     ok(f"bitstream ready: {bit_path}")
     return 0
 
@@ -362,6 +454,13 @@ def build_parser() -> argparse.ArgumentParser:
     pf.add_argument("--sv2v", default="sv2v")
     pf.add_argument("--nextpnr", default="nextpnr-ecp5")
     pf.add_argument("--ecppack", default="ecppack")
+    pf.add_argument("--ecpbram", default="ecpbram")
+    pf.add_argument("--bram-width", type=int, default=32)
+    pf.add_argument("--bram-depth", type=int, default=16384)
+    pf.add_argument("--bram-random-init", action="store_true")
+    pf.add_argument("--bram-random-seed", default="")
+    pf.add_argument("--bram-init-wordhex", default="")
+    pf.add_argument("--bram-to-wordhex", default="")
     pf.add_argument("--bit", required=True)
     pf.set_defaults(func=cmd_fpga)
     return p
@@ -372,7 +471,7 @@ def main() -> int:
     args = parser.parse_args()
     try:
         return int(args.func(args))
-    except (FileNotFoundError, subprocess.CalledProcessError) as exc:
+    except (FileNotFoundError, subprocess.CalledProcessError, ValueError) as exc:
         print(style(f"[FAIL] {exc}", Color.BOLD, Color.RED), file=sys.stderr)
         return 1
 

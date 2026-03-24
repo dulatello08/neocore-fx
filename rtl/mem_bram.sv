@@ -72,24 +72,17 @@ module mem_bram (
     // -------------------------------------------------------------------------
     logic [31:0] ibus_bank_rdata [0:BANKS-1];
     logic [31:0] dbus_bank_rdata [0:BANKS-1];
-    logic [3:0]  dbus_bank_be [0:BANKS-1];
     logic [1:0]  ibus_bank_sel_reg;
     logic [1:0]  dbus_bank_sel_reg;
-
-    always_comb begin
-        for (int i = 0; i < BANKS; i++) begin
-            dbus_bank_be[i] = 4'b0000;
-        end
-        if (dbus_valid && dbus_in_range && dbus_we) begin
-            dbus_bank_be[dbus_bank_sel] = dbus_sel;
-        end
-    end
 
     generate
         for (genvar i = 0; i < BANKS; i++) begin : bank_gen
             (* ram_style = "block" *) logic [31:0] mem [0:BANK_DEPTH-1];
             logic [31:0] rdata_a;
             logic [31:0] rdata_b;
+            logic        dbus_hit_bank;
+
+            assign dbus_hit_bank = dbus_valid && dbus_in_range && dbus_we && (dbus_bank_sel == i[1:0]);
 
             // Port A: instruction fetch (read-only)
             always_ff @(posedge clk) begin
@@ -98,24 +91,42 @@ module mem_bram (
 
             // Port B: data access (read/write with byte-lane enables)
             always_ff @(posedge clk) begin
-                if (dbus_bank_be[i][3]) mem[dbus_row_addr][31:24] <= dbus_wdata[31:24];
-                if (dbus_bank_be[i][2]) mem[dbus_row_addr][23:16] <= dbus_wdata[23:16];
-                if (dbus_bank_be[i][1]) mem[dbus_row_addr][15:8]  <= dbus_wdata[15:8];
-                if (dbus_bank_be[i][0]) mem[dbus_row_addr][7:0]   <= dbus_wdata[7:0];
+                if (dbus_hit_bank && dbus_sel[3]) mem[dbus_row_addr][31:24] <= dbus_wdata[31:24];
+                if (dbus_hit_bank && dbus_sel[2]) mem[dbus_row_addr][23:16] <= dbus_wdata[23:16];
+                if (dbus_hit_bank && dbus_sel[1]) mem[dbus_row_addr][15:8]  <= dbus_wdata[15:8];
+                if (dbus_hit_bank && dbus_sel[0]) mem[dbus_row_addr][7:0]   <= dbus_wdata[7:0];
                 rdata_b <= mem[dbus_row_addr];
             end
 
             assign ibus_bank_rdata[i] = rdata_a;
             assign dbus_bank_rdata[i] = rdata_b;
 
-`ifndef SYNTHESIS
             initial begin : init_bank_mem
                 int unsigned j;
                 for (j = 0; j < BANK_DEPTH; j = j + 1) begin
                     mem[j] = 32'h0000_0000;
                 end
-            end
+`ifdef MEM_INIT_HEX_BANK0
+                if (i == 0) begin
+                    $readmemh(`MEM_INIT_HEX_BANK0, mem);
+                end
 `endif
+`ifdef MEM_INIT_HEX_BANK1
+                if (i == 1) begin
+                    $readmemh(`MEM_INIT_HEX_BANK1, mem);
+                end
+`endif
+`ifdef MEM_INIT_HEX_BANK2
+                if (i == 2) begin
+                    $readmemh(`MEM_INIT_HEX_BANK2, mem);
+                end
+`endif
+`ifdef MEM_INIT_HEX_BANK3
+                if (i == 3) begin
+                    $readmemh(`MEM_INIT_HEX_BANK3, mem);
+                end
+`endif
+            end
         end
     endgenerate
 

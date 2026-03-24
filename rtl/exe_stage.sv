@@ -36,6 +36,7 @@ module exe_stage
     // Halt metadata from decode (`B .` alias).
     input  logic        id_is_halt_i,
     input  logic        id_pred_taken_i,
+    input  logic [31:0] id_pred_target_i,
     input  logic        id_fetch_fault_i,
     input  logic        id_illegal_i,
     input  logic [1:0]  id_fwd_rs1_sel_i,
@@ -171,8 +172,10 @@ module exe_stage
 
         if (id_valid_i && !id_illegal_i) begin
             if (id_is_jalr_i) begin
-                redirect_valid_o = 1'b1;
-                mispredict_o = 1'b1;
+                if (!id_pred_taken_i || (id_pred_target_i != actual_target)) begin
+                    redirect_valid_o = 1'b1;
+                    mispredict_o = 1'b1;
+                end
             end else if (id_is_jal_i || (id_branch_type_i != BR_NONE)) begin
                 if (actual_taken != id_pred_taken_i) begin
                     redirect_valid_o = 1'b1;

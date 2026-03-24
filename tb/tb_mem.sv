@@ -179,7 +179,11 @@ module tb_mem;
 
         ibus_read(32'h0000_0000, rd, ack_seen, err_seen);
         check_true(ack_seen && !err_seen, "I-Bus read at 0x0 returns ack");
+`ifdef MEM_INIT_HEX_BANK0
+        check_true(^rd !== 1'bX, "I-Bus read data is fully initialized with random/program BRAM image");
+`else
         check_eq32(rd, 32'h0000_0000, "I-Bus default read data is zero");
+`endif
 
         dbus_xact(1'b1, 32'h0000_0020, 32'h1122_3344, 4'b1111, rd, ack_seen, err_seen);
         check_true(ack_seen && !err_seen, "D-Bus full-word write acks");

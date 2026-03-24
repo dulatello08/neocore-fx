@@ -37,6 +37,7 @@ module tb_frontend_timing;
   logic [31:0] id_pc;
   logic [31:0] id_inst;
   logic        id_pred_taken;
+  logic [31:0] id_pred_target;
   logic        id_fetch_fault;
 
   logic        pred_valid;
@@ -75,6 +76,12 @@ module tb_frontend_timing;
     .if1_valid_i      (if2_if1_valid),
     .if1_pc_i         (if2_if1_pc),
     .if1_pred_taken_i (if2_if1_pred_taken),
+    .bp_update_valid_i(1'b0),
+    .bp_update_pc_i   (32'h0000_0000),
+    .bp_update_taken_i(1'b0),
+    .ras_push_valid_i (1'b0),
+    .ras_push_addr_i  (32'h0000_0000),
+    .ras_pop_valid_i  (1'b0),
     .i_done_i         (i_done),
     .i_rdata_i        (i_rdata),
     .i_err_i          (i_err),
@@ -82,6 +89,7 @@ module tb_frontend_timing;
     .id_pc_o          (id_pc),
     .id_inst_o        (id_inst),
     .id_pred_taken_o  (id_pred_taken),
+    .id_pred_target_o (id_pred_target),
     .id_fetch_fault_o (id_fetch_fault),
     .pred_valid_o     (pred_valid),
     .pred_taken_o     (pred_taken),

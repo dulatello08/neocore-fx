@@ -21,6 +21,7 @@ module tb_halt_path;
     logic [31:0] if2_pc;
     logic [31:0] if2_inst;
     logic        if2_pred_taken;
+    logic [31:0] if2_pred_target;
     logic        if2_fetch_fault;
 
     // Register-file interface into ID.
@@ -64,6 +65,7 @@ module tb_halt_path;
     logic        idex_is_lpc;
     logic        idex_is_halt;
     logic        idex_pred_taken;
+    logic [31:0] idex_pred_target;
     logic        idex_fetch_fault;
     logic [1:0]  idex_fwd_rs1_sel;
     logic [1:0]  idex_fwd_rs2_sel;
@@ -141,6 +143,7 @@ module tb_halt_path;
         .if2_pc_i           (if2_pc),
         .if2_inst_i         (if2_inst),
         .if2_pred_taken_i   (if2_pred_taken),
+        .if2_pred_target_i  (if2_pred_target),
         .if2_fetch_fault_i  (if2_fetch_fault),
         .rf_rs1_addr_o      (rf_rs1_addr),
         .rf_rs2_addr_o      (rf_rs2_addr),
@@ -179,6 +182,7 @@ module tb_halt_path;
         .idex_is_lpc_o      (idex_is_lpc),
         .idex_is_halt_o     (idex_is_halt),
         .idex_pred_taken_o  (idex_pred_taken),
+        .idex_pred_target_o (idex_pred_target),
         .idex_fetch_fault_o (idex_fetch_fault),
         .idex_fwd_rs1_sel_o (idex_fwd_rs1_sel),
         .idex_fwd_rs2_sel_o (idex_fwd_rs2_sel),
@@ -212,6 +216,7 @@ module tb_halt_path;
         .id_is_lpc_i        (idex_is_lpc),
         .id_is_halt_i       (idex_is_halt),
         .id_pred_taken_i    (idex_pred_taken),
+        .id_pred_target_i   (idex_pred_target),
         .id_fetch_fault_i   (idex_fetch_fault),
         .id_illegal_i       (idex_illegal),
         .id_fwd_rs1_sel_i   (idex_fwd_rs1_sel),
@@ -317,6 +322,7 @@ module tb_halt_path;
         if2_pc = 32'h0000_1000;
         if2_inst = 32'h0000_0000;
         if2_pred_taken = 1'b0;
+        if2_pred_target = 32'h0000_0000;
         if2_fetch_fault = 1'b0;
 
         rf_rs1_data = 32'h0000_0000;
@@ -361,6 +367,7 @@ module tb_halt_path;
         // B . encoding (BR class, op=0, offset=0) should decode as halt.
         if2_valid <= 1'b1;
         if2_pred_taken <= 1'b1;
+        if2_pred_target <= 32'h0000_1000;
         if2_pc <= 32'h0000_1000;
         if2_inst <= 32'h4000_0000;
 
@@ -373,6 +380,7 @@ module tb_halt_path;
         // Stop injecting instructions.
         if2_valid <= 1'b0;
         if2_pred_taken <= 1'b0;
+        if2_pred_target <= 32'h0000_0000;
         if2_inst <= 32'h0000_0000;
 
         @(posedge clk);

@@ -13,4 +13,5 @@
 ../rtl/mem.sv
 ../rtl/neocorefx_core.sv
 ../rtl/neocorefx_top.sv
+../rtl/neocorefx_pll_40mhz.sv
 ../rtl/neocorefx_fpga_top.sv

@@ -18,6 +18,7 @@ module id_stage
     input  logic [31:0] if2_pc_i,
     input  logic [31:0] if2_inst_i,
     input  logic        if2_pred_taken_i,
+    input  logic [31:0] if2_pred_target_i,
     input  logic        if2_fetch_fault_i,
 
     // Register file interface.
@@ -64,6 +65,7 @@ module id_stage
     // Halt metadata for `B .` alias.
     output logic        idex_is_halt_o,
     output logic        idex_pred_taken_o,
+    output logic [31:0] idex_pred_target_o,
     output logic        idex_fetch_fault_o,
     output logic [1:0]  idex_fwd_rs1_sel_o,
     output logic [1:0]  idex_fwd_rs2_sel_o,
@@ -323,13 +325,16 @@ module id_stage
     end
 
     always_comb begin
+        // Store data (rs2) is consumed in MEM stage and can be corrected by the
+        // dedicated WB->MEM store-data forward path, so do not interlock that
+        // dependency here.
         load_use_stall_o = !illegal_d
                         && if2_valid_i
                         && exe_valid_i
                         && exe_mem_read_i
                         && (exe_rd_i != 4'h0)
                         && ((rs1_used_d && (exe_rd_i == rs1_d))
-                         || (rs2_used_d && (exe_rd_i == rs2_d)));
+                         || (rs2_used_d && !mem_write_d && (exe_rd_i == rs2_d)));
 
         fwd_rs1_sel_d = FWD_NONE;
         if (!illegal_d && rs1_used_d && (rs1_d != 4'h0)) begin
@@ -378,6 +383,7 @@ module id_stage
             idex_is_lpc_o        <= 1'b0;
             idex_is_halt_o       <= 1'b0;
             idex_pred_taken_o    <= 1'b0;
+            idex_pred_target_o   <= 32'h0000_0000;
             idex_fetch_fault_o   <= 1'b0;
             idex_fwd_rs1_sel_o   <= FWD_NONE;
             idex_fwd_rs2_sel_o   <= FWD_NONE;
@@ -405,6 +411,7 @@ module id_stage
             idex_is_lpc_o        <= 1'b0;
             idex_is_halt_o       <= 1'b0;
             idex_pred_taken_o    <= 1'b0;
+            idex_pred_target_o   <= 32'h0000_0000;
             idex_fetch_fault_o   <= 1'b0;
             idex_fwd_rs1_sel_o   <= FWD_NONE;
             idex_fwd_rs2_sel_o   <= FWD_NONE;
@@ -433,6 +440,7 @@ module id_stage
                 idex_is_lpc_o        <= 1'b0;
                 idex_is_halt_o       <= 1'b0;
                 idex_pred_taken_o    <= 1'b0;
+                idex_pred_target_o   <= 32'h0000_0000;
                 idex_fetch_fault_o   <= 1'b0;
                 idex_fwd_rs1_sel_o   <= FWD_NONE;
                 idex_fwd_rs2_sel_o   <= FWD_NONE;
@@ -460,6 +468,7 @@ module id_stage
                 idex_is_lpc_o        <= is_lpc_d && !illegal_d;
                 idex_is_halt_o       <= is_halt_d && !illegal_d;
                 idex_pred_taken_o    <= if2_pred_taken_i;
+                idex_pred_target_o   <= if2_pred_target_i;
                 idex_fetch_fault_o   <= if2_fetch_fault_i;
                 idex_fwd_rs1_sel_o   <= fwd_rs1_sel_d;
                 idex_fwd_rs2_sel_o   <= fwd_rs2_sel_d;

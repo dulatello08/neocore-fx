@@ -84,6 +84,12 @@ module neocorefx_core
   logic        pred_valid;
   logic        pred_taken;
   logic [31:0] pred_target;
+  logic        bp_update_valid;
+  logic [31:0] bp_update_pc;
+  logic        bp_update_taken;
+  logic        ras_push_valid;
+  logic [31:0] ras_push_addr;
+  logic        ras_pop_valid;
 
   logic [31:0] if1_pc;
 
@@ -95,6 +101,7 @@ module neocorefx_core
   logic [31:0] id_if2_pc;
   logic [31:0] id_if2_inst;
   logic        id_if2_pred_taken;
+  logic [31:0] id_if2_pred_target;
   logic        id_if2_fetch_fault;
 
   // ============================================================================
@@ -128,6 +135,7 @@ module neocorefx_core
   logic        idex_is_lpc;
   logic        idex_is_halt;
   logic        idex_pred_taken;
+  logic [31:0] idex_pred_target;
   logic        idex_fetch_fault;
   logic [1:0]  idex_fwd_rs1_sel;
   logic [1:0]  idex_fwd_rs2_sel;
@@ -191,6 +199,7 @@ module neocorefx_core
   logic [31:0] branch_redirect_count;
   logic [31:0] load_stall_count;
   logic [31:0] mem_stall_count;
+  localparam logic [3:0] ABI_LR_REG = 4'hB;
 
   // ============================================================================
   // Control policy
@@ -215,6 +224,33 @@ module neocorefx_core
 
   assign mem_stall = core_hold;
   assign mem_flush = 1'b0;
+
+  // Train IF2 dynamic predictor only from resolved conditional branches.
+  // Branches in EXE resolve as: actual_taken = pred_taken ^ mispredict.
+  assign bp_update_valid = idex_valid
+                        && !exe_stall
+                        && !idex_illegal
+                        && ((idex_branch_type == BR_EQ)
+                         || (idex_branch_type == BR_NE)
+                         || (idex_branch_type == BR_LT)
+                         || (idex_branch_type == BR_LTU));
+  assign bp_update_pc = idex_pc;
+  assign bp_update_taken = idex_pred_taken ^ mispredict;
+
+  // Maintain IF2 return-address stack from resolved jumps in EXE.
+  assign ras_push_valid = idex_valid
+                       && !exe_stall
+                       && !idex_illegal
+                       && (idex_rd == ABI_LR_REG)
+                       && (idex_is_jal || idex_is_jalr);
+  assign ras_push_addr = idex_pc + 32'd4;
+  assign ras_pop_valid = idex_valid
+                      && !exe_stall
+                      && !idex_illegal
+                      && idex_is_jalr
+                      && (idex_rd == 4'h0)
+                      && (idex_rs1_addr == ABI_LR_REG)
+                      && (idex_imm == 32'h0000_0000);
 
   // ============================================================================
   // Stage instances
@@ -245,6 +281,12 @@ module neocorefx_core
     .if1_valid_i        (if2_if1_valid),
     .if1_pc_i           (if2_if1_pc),
     .if1_pred_taken_i   (if2_if1_pred_taken),
+    .bp_update_valid_i  (bp_update_valid),
+    .bp_update_pc_i     (bp_update_pc),
+    .bp_update_taken_i  (bp_update_taken),
+    .ras_push_valid_i   (ras_push_valid),
+    .ras_push_addr_i    (ras_push_addr),
+    .ras_pop_valid_i    (ras_pop_valid),
     .i_done_i           (i_done_i),
     .i_rdata_i          (i_rdata_i),
     .i_err_i            (i_err_i),
@@ -252,6 +294,7 @@ module neocorefx_core
     .id_pc_o            (id_if2_pc),
     .id_inst_o          (id_if2_inst),
     .id_pred_taken_o    (id_if2_pred_taken),
+    .id_pred_target_o   (id_if2_pred_target),
     .id_fetch_fault_o   (id_if2_fetch_fault),
     .pred_valid_o       (pred_valid),
     .pred_taken_o       (pred_taken),
@@ -268,6 +311,7 @@ module neocorefx_core
     .if2_pc_i           (id_if2_pc),
     .if2_inst_i         (id_if2_inst),
     .if2_pred_taken_i   (id_if2_pred_taken),
+    .if2_pred_target_i  (id_if2_pred_target),
     .if2_fetch_fault_i  (id_if2_fetch_fault),
     .rf_rs1_addr_o      (rf_rs1_addr),
     .rf_rs2_addr_o      (rf_rs2_addr),
@@ -303,6 +347,7 @@ module neocorefx_core
     .idex_is_lpc_o      (idex_is_lpc),
     .idex_is_halt_o     (idex_is_halt),
     .idex_pred_taken_o  (idex_pred_taken),
+    .idex_pred_target_o (idex_pred_target),
     .idex_fetch_fault_o (idex_fetch_fault),
     .idex_fwd_rs1_sel_o (idex_fwd_rs1_sel),
     .idex_fwd_rs2_sel_o (idex_fwd_rs2_sel),
@@ -336,6 +381,7 @@ module neocorefx_core
     .id_is_lpc_i        (idex_is_lpc),
     .id_is_halt_i       (idex_is_halt),
     .id_pred_taken_i    (idex_pred_taken),
+    .id_pred_target_i   (idex_pred_target),
     .id_fetch_fault_i   (idex_fetch_fault),
     .id_illegal_i       (idex_illegal),
     .id_fwd_rs1_sel_i   (idex_fwd_rs1_sel),
