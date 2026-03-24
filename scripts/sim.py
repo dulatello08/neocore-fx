@@ -386,6 +386,12 @@ def cmd_fpga(args: argparse.Namespace) -> int:
         "--textcfg",
         str(cfg_path),
     ]
+    if args.timing_allow_fail:
+        nextpnr_cmd.append("--timing-allow-fail")
+    if args.seed is not None:
+        nextpnr_cmd.extend(["--seed", str(args.seed)])
+    if args.report:
+        nextpnr_cmd.extend(["--report", str(args.report)])
     run_cmd(nextpnr_cmd, "nextpnr place-and-route")
 
     cfg_for_pack = cfg_path
@@ -461,6 +467,9 @@ def build_parser() -> argparse.ArgumentParser:
     pf.add_argument("--bram-random-seed", default="")
     pf.add_argument("--bram-init-wordhex", default="")
     pf.add_argument("--bram-to-wordhex", default="")
+    pf.add_argument("--timing-allow-fail", action="store_true")
+    pf.add_argument("--seed", type=int, default=1)
+    pf.add_argument("--report", default="")
     pf.add_argument("--bit", required=True)
     pf.set_defaults(func=cmd_fpga)
     return p

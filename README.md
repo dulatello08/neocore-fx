@@ -141,11 +141,20 @@ Program format conversion helpers:
 ```bash
 python3 scripts/bin2hex.py input.bin mem/input.hex
 python3 scripts/wordhex_to_bytehex.py input_words.hex mem/input.hex
+python3 scripts/bytehex_to_wordhex.py mem/input.hex build/input.wordhex --depth 16384
 ```
 
 ## FPGA Build (ULX3S 85F)
 
 ```bash
 make fpga
+make fpga-base-config
+make fpga-program PROGRAM=mem/dhrystone.hex
 make fpga-list
 ```
+
+`make fpga-base-config` builds and keeps a persistent `core_original.config`
+with garbage BRAM contents generated from `/dev/urandom`.
+`make fpga-program` converts program input to interleaved 32-bit bank files,
+then applies four explicit `ecpbram -v` passes (`bank0..bank3`) from garbage
+banks to program banks, and finally packs the patched config.

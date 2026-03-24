@@ -102,10 +102,22 @@ module mem_bram (
             assign dbus_bank_rdata[i] = rdata_b;
 
             initial begin : init_bank_mem
+`ifdef SYNTHESIS
+  `ifdef MEM_INIT_HEX_BANK0
+                // Yosys ignores $readmemh after a for-loop, so skip zero-init
+                // when bank init data is provided.
+  `else
                 int unsigned j;
                 for (j = 0; j < BANK_DEPTH; j = j + 1) begin
                     mem[j] = 32'h0000_0000;
                 end
+  `endif
+`else
+                int unsigned j;
+                for (j = 0; j < BANK_DEPTH; j = j + 1) begin
+                    mem[j] = 32'h0000_0000;
+                end
+`endif
 `ifdef MEM_INIT_HEX_BANK0
                 if (i == 0) begin
                     $readmemh(`MEM_INIT_HEX_BANK0, mem);

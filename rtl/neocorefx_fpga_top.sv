@@ -75,7 +75,7 @@ module neocorefx_fpga_top (
     led[4] <= wb_fault;            // Fault pulse sticky state from WB.
     led[3] <= halted;              // Halt retired.
     led[2] <= current_pc[3];       // PC movement.
-    led[1] <= status_count[4];     // MEM stall activity.
+    led[1] <= status_count[4];     // MEM stall activity.1
     led[0] <= status_count[3];     // Load-use stall activity.
   end
 
