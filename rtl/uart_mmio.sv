@@ -1,6 +1,6 @@
 //
 // uart_mmio.sv
-// NeoCoreFX - Simple MMIO UART (TX serializer + register block)
+// NeoCoreFX - MMIO UART (TX serializer + RX deserializer + register block)
 //
 
 module uart_mmio (
@@ -60,6 +60,14 @@ module uart_mmio (
     logic        rx_valid_q;
     logic [7:0]  rx_data_q;
 
+    // RX deserializer state
+    logic        rx_sync1_q;         // 1st metastability flop
+    logic        rx_sync2_q;         // 2nd metastability flop (clean signal)
+    logic        rx_active_q;        // currently receiving a frame
+    logic [7:0]  rx_shift_q;         // shift register for incoming data bits
+    logic [3:0]  rx_bit_idx_q;       // 0 = start bit, 1..8 = data, 9 = stop
+    logic [31:0] rx_baud_cnt_q;      // baud tick counter
+
     logic        req_valid_q;
     logic        req_we_q;
     logic [31:0] req_addr_q;
@@ -87,10 +95,6 @@ module uart_mmio (
     endfunction
 
     assign uart_tx_o = tx_active_q ? tx_shift_q[tx_bit_idx_q] : 1'b1;
-
-    // RX serial sampler is not implemented yet; keep input explicitly consumed.
-    logic unused_uart_rx;
-    assign unused_uart_rx = uart_rx_i;
 
 `ifndef SYNTHESIS
     always @(posedge clk) begin
@@ -153,6 +157,13 @@ module uart_mmio (
 
             rx_valid_q <= 1'b0;
             rx_data_q <= 8'h00;
+
+            rx_sync1_q <= 1'b1;
+            rx_sync2_q <= 1'b1;
+            rx_active_q <= 1'b0;
+            rx_shift_q <= 8'h00;
+            rx_bit_idx_q <= 4'd0;
+            rx_baud_cnt_q <= 32'd0;
 
             req_valid_q <= 1'b0;
             req_we_q <= 1'b0;
@@ -218,6 +229,56 @@ module uart_mmio (
                     tx_bit_idx_n = 4'd0;
                     tx_rd_ptr_n = tx_rd_ptr_q + 1'b1;
                     tx_count_n = tx_count_q - 1'b1;
+                end
+            end
+
+            // ----------------------------------------------------------------
+            // RX deserializer engine
+            // ----------------------------------------------------------------
+
+            // 2-FF synchronizer for metastability on uart_rx_i
+            rx_sync1_q <= uart_rx_i;
+            rx_sync2_q <= rx_sync1_q;
+
+            if (rx_active_q) begin
+                if (rx_baud_cnt_q >= bauddiv_eff) begin
+                    rx_baud_cnt_q <= 32'd0;
+                    if (rx_bit_idx_q == 4'd0) begin
+                        // Mid-point of start bit -- verify it is still low.
+                        if (rx_sync2_q == 1'b0) begin
+                            rx_bit_idx_q <= 4'd1;
+                        end else begin
+                            // False start: abort.
+                            rx_active_q <= 1'b0;
+                        end
+                    end else if (rx_bit_idx_q <= 4'd8) begin
+                        // Data bits 1..8: shift in LSB-first.
+                        rx_shift_q <= {rx_sync2_q, rx_shift_q[7:1]};
+                        rx_bit_idx_q <= rx_bit_idx_q + 4'd1;
+                    end else begin
+                        // Stop bit (bit_idx == 9).
+                        rx_active_q <= 1'b0;
+                        if (rx_sync2_q == 1'b1 && ctrl_q[1]) begin
+                            // Valid stop bit & RX enabled -> deliver byte.
+                            if (rx_valid_n) begin
+                                rx_overrun_n = 1'b1;
+                            end
+                            rx_data_n = rx_shift_q;
+                            rx_valid_n = 1'b1;
+                        end
+                        // If stop bit is low (framing error), silently drop.
+                    end
+                end else begin
+                    rx_baud_cnt_q <= rx_baud_cnt_q + 32'd1;
+                end
+            end else begin
+                // Idle: detect falling edge (start bit).
+                if (rx_sync2_q == 1'b0) begin
+                    rx_active_q <= 1'b1;
+                    rx_bit_idx_q <= 4'd0;
+                    rx_shift_q <= 8'h00;
+                    // Start sampling at half a bit period to reach mid-bit.
+                    rx_baud_cnt_q <= bauddiv_eff >> 1;
                 end
             end
 
