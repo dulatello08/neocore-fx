@@ -57,6 +57,19 @@ module neocorefx_top (
   logic [31:0] core_d_rdata;
   logic        core_d_err;
 
+  logic        dbg_halt_req;
+  logic        dbg_resume_req;
+  logic        dbg_step_req;
+  logic [3:0]  dbg_gpr_addr;
+  logic [31:0] dbg_gpr_rdata;
+  logic        dbg_gpr_we;
+  logic [31:0] dbg_gpr_wdata;
+  logic [2:0]  dbg_halt_reason;
+  logic        dbg_last_fault;
+  logic [31:0] dbg_last_fault_pc;
+  logic [31:0] dbg_last_fault_addr;
+  logic [31:0] dbg_last_illegal_inst;
+
   // ============================================================================
   // BIU <-> memory wiring
   // ============================================================================
@@ -104,6 +117,13 @@ module neocorefx_top (
     .clk                    (clk),
     .rst                    (rst),
     .run_i                  (en),
+    .dbg_halt_req_i         (dbg_halt_req),
+    .dbg_resume_req_i       (dbg_resume_req),
+    .dbg_step_req_i         (dbg_step_req),
+    .dbg_gpr_addr_i         (dbg_gpr_addr),
+    .dbg_gpr_rdata_o        (dbg_gpr_rdata),
+    .dbg_gpr_we_i           (dbg_gpr_we),
+    .dbg_gpr_wdata_i        (dbg_gpr_wdata),
     .i_req_o                (core_i_req),
     .i_addr_o               (core_i_addr),
     .i_busy_i               (core_i_busy),
@@ -121,6 +141,11 @@ module neocorefx_top (
     .d_err_i                (core_d_err),
     .halted_o               (halted),
     .current_pc_o           (current_pc),
+    .dbg_halt_reason_o      (dbg_halt_reason),
+    .dbg_last_fault_o       (dbg_last_fault),
+    .dbg_last_fault_pc_o    (dbg_last_fault_pc),
+    .dbg_last_fault_addr_o  (dbg_last_fault_addr),
+    .dbg_last_illegal_inst_o(dbg_last_illegal_inst),
     .wb_valid_o             (wb_valid),
     .wb_fault_o             (wb_fault),
     .load_use_stall_o       (load_use_stall),
@@ -186,6 +211,26 @@ module neocorefx_top (
     .dbus_ack               (dbus_ack),
     .dbus_rdata             (dbus_rdata),
     .dbus_err               (dbus_err),
+    .debug_enable_i         (1'b1),
+    .core_halted_i          (halted),
+    .core_current_pc_i      (current_pc),
+    .core_halt_reason_i     (dbg_halt_reason),
+    .core_last_fault_i      (dbg_last_fault),
+    .core_last_fault_pc_i   (dbg_last_fault_pc),
+    .core_last_fault_addr_i (dbg_last_fault_addr),
+    .core_last_illegal_inst_i(dbg_last_illegal_inst),
+    .core_cycle_count_i     (cycle_count),
+    .core_retire_count_i    (retire_count),
+    .core_redirect_count_i  (branch_redirect_count),
+    .core_load_stall_count_i(load_stall_count),
+    .core_mem_stall_count_i (mem_stall_count),
+    .dbg_halt_req_o         (dbg_halt_req),
+    .dbg_resume_req_o       (dbg_resume_req),
+    .dbg_step_req_o         (dbg_step_req),
+    .dbg_gpr_addr_o         (dbg_gpr_addr),
+    .dbg_gpr_rdata_i        (dbg_gpr_rdata),
+    .dbg_gpr_we_o           (dbg_gpr_we),
+    .dbg_gpr_wdata_o        (dbg_gpr_wdata),
     .uart_rx_i              (uart_rx_i),
     .uart_tx_o              (uart_tx_o)
   );

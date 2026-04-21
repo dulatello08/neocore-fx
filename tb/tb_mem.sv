@@ -57,6 +57,26 @@ module tb_mem;
         .dbus_ack   (dbus_ack),
         .dbus_rdata (dbus_rdata),
         .dbus_err   (dbus_err),
+        .debug_enable_i(1'b0),
+        .core_halted_i(1'b0),
+        .core_current_pc_i(32'h0000_0000),
+        .core_halt_reason_i(3'b000),
+        .core_last_fault_i(1'b0),
+        .core_last_fault_pc_i(32'h0000_0000),
+        .core_last_fault_addr_i(32'h0000_0000),
+        .core_last_illegal_inst_i(32'h0000_0000),
+        .core_cycle_count_i(32'h0000_0000),
+        .core_retire_count_i(32'h0000_0000),
+        .core_redirect_count_i(32'h0000_0000),
+        .core_load_stall_count_i(32'h0000_0000),
+        .core_mem_stall_count_i(32'h0000_0000),
+        .dbg_halt_req_o(),
+        .dbg_resume_req_o(),
+        .dbg_step_req_o(),
+        .dbg_gpr_addr_o(),
+        .dbg_gpr_rdata_i(32'h0000_0000),
+        .dbg_gpr_we_o(),
+        .dbg_gpr_wdata_o(),
         .uart_rx_i  (uart_rx),
         .uart_tx_o  (uart_tx)
     );
@@ -236,27 +256,27 @@ module tb_mem;
         check_true(!rd[1], "UART status clears RX valid after RX read");
 
         // Force TX FIFO full and confirm TXDATA write is backpressured.
-        dut.u_uart.tx_count_q = 5'd16;
-        dut.u_uart.tx_active_q = 1'b1;
-        dut.u_uart.tx_bit_idx_q = 4'd0;
-        dut.u_uart.tx_baud_cnt_q = 32'd0;
-        dut.u_uart.bauddiv_q = 32'd1000;
+        dut.u_uart_console.tx_count_q = 5'd16;
+        dut.u_uart_console.tx_active_q = 1'b1;
+        dut.u_uart_console.tx_bit_idx_q = 4'd0;
+        dut.u_uart_console.tx_baud_cnt_q = 32'd0;
+        dut.u_uart_console.bauddiv_q = 32'd1000;
         dbus_xact(1'b1, UART_BASE_ADDR + UART_TXDATA_OFFSET, 32'h0000_0042, 4'b1111, rd, ack_seen, err_seen);
         check_true(!ack_seen && !err_seen, "UART TX write stalls when FIFO is full");
-        dut.u_uart.tx_count_q = 5'd15;
-        dut.u_uart.tx_active_q = 1'b0;
+        dut.u_uart_console.tx_count_q = 5'd15;
+        dut.u_uart_console.tx_active_q = 1'b0;
         dbus_xact(1'b1, UART_BASE_ADDR + UART_TXDATA_OFFSET, 32'h0000_0042, 4'b1111, rd, ack_seen, err_seen);
         check_true(ack_seen && !err_seen, "UART TX write resumes once FIFO has space");
 
         // Hold request high one extra cycle after ack; UART must not replay write.
-        dut.u_uart.ctrl_q = 32'h0000_0003;
-        dut.u_uart.tx_wr_ptr_q = 4'd0;
-        dut.u_uart.tx_rd_ptr_q = 4'd0;
-        dut.u_uart.tx_count_q = 5'd0;
-        dut.u_uart.tx_active_q = 1'b1;
-        dut.u_uart.tx_bit_idx_q = 4'd0;
-        dut.u_uart.tx_baud_cnt_q = 32'd0;
-        dut.u_uart.bauddiv_q = 32'd1000;
+        dut.u_uart_console.ctrl_q = 32'h0000_0003;
+        dut.u_uart_console.tx_wr_ptr_q = 4'd0;
+        dut.u_uart_console.tx_rd_ptr_q = 4'd0;
+        dut.u_uart_console.tx_count_q = 5'd0;
+        dut.u_uart_console.tx_active_q = 1'b1;
+        dut.u_uart_console.tx_bit_idx_q = 4'd0;
+        dut.u_uart_console.tx_baud_cnt_q = 32'd0;
+        dut.u_uart_console.bauddiv_q = 32'd1000;
 
         dbus_cyc   <= 1'b1;
         dbus_stb   <= 1'b1;
@@ -267,19 +287,19 @@ module tb_mem;
         @(posedge clk);
         #1;
         check_true(dbus_ack && !dbus_err, "UART TX write acks on first cycle");
-        check_true(dut.u_uart.tx_count_q == 5'd1, "UART TX FIFO increments exactly once");
+        check_true(dut.u_uart_console.tx_count_q == 5'd1, "UART TX FIFO increments exactly once");
 
         @(posedge clk);
         #1;
         check_true(!dbus_ack && !dbus_err, "UART does not replay ack while request level remains high");
-        check_true(dut.u_uart.tx_count_q == 5'd1, "UART TX FIFO count unchanged during held request");
+        check_true(dut.u_uart_console.tx_count_q == 5'd1, "UART TX FIFO count unchanged during held request");
 
         // Repeating the same request for another cycle must progress (no
         // deadlock on identical back-to-back writes).
         @(posedge clk);
         #1;
         check_true(dbus_ack && !dbus_err, "UART accepts identical write after one-cycle holdoff");
-        check_true(dut.u_uart.tx_count_q == 5'd2, "UART TX FIFO increments on identical back-to-back write");
+        check_true(dut.u_uart_console.tx_count_q == 5'd2, "UART TX FIFO increments on identical back-to-back write");
 
         dbus_cyc   <= 1'b0;
         dbus_stb   <= 1'b0;

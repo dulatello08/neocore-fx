@@ -51,6 +51,8 @@ This is the central entry point for project documentation.
 - [docs/far-branching.md](docs/far-branching.md): long-range branch strategy.
 - [docs/bus-architecture.md](docs/bus-architecture.md): BIU/memory bus integration notes.
 - [docs/uart_mmio.h](docs/uart_mmio.h): UART MMIO register definitions and polling helpers.
+- [docs/debug-interface.md](docs/debug-interface.md): hardware debug architecture, MMIO map, and UART protocol.
+- [docs/debug_mmio.h](docs/debug_mmio.h): C definitions for debug MMIO register access.
 - [docs/exceptions-future.md](docs/exceptions-future.md): planned exception model.
 
 ### Directory Guides

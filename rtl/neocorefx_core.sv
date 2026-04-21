@@ -11,6 +11,13 @@ module neocorefx_core
   input  logic        clk,
   input  logic        rst,
   input  logic        run_i,
+  input  logic        dbg_halt_req_i,
+  input  logic        dbg_resume_req_i,
+  input  logic        dbg_step_req_i,
+  input  logic [3:0]  dbg_gpr_addr_i,
+  output logic [31:0] dbg_gpr_rdata_o,
+  input  logic        dbg_gpr_we_i,
+  input  logic [31:0] dbg_gpr_wdata_i,
 
   // BIU instruction response/request channel.
   output logic        i_req_o,
@@ -34,6 +41,11 @@ module neocorefx_core
   // Core status.
   output logic        halted_o,
   output logic [31:0] current_pc_o,
+  output logic [2:0]  dbg_halt_reason_o,
+  output logic        dbg_last_fault_o,
+  output logic [31:0] dbg_last_fault_pc_o,
+  output logic [31:0] dbg_last_fault_addr_o,
+  output logic [31:0] dbg_last_illegal_inst_o,
 
   // Profiling/status pulses.
   output logic        wb_valid_o,
@@ -56,7 +68,28 @@ module neocorefx_core
   // Pipeline control fabric
   // ============================================================================
 
-  logic halted_q;
+  typedef enum logic [1:0] {
+    DBG_RUN          = 2'd0,
+    DBG_HALT_PENDING = 2'd1,
+    DBG_HALTED       = 2'd2,
+    DBG_STEP_PENDING = 2'd3
+  } dbg_state_t;
+
+  localparam logic [2:0] HALT_REASON_NONE       = 3'd0;
+  localparam logic [2:0] HALT_REASON_B_DOT      = 3'd1;
+  localparam logic [2:0] HALT_REASON_DEBUG_REQ  = 3'd2;
+  localparam logic [2:0] HALT_REASON_DEBUG_STEP = 3'd3;
+
+  dbg_state_t   dbg_state_q;
+  logic [2:0]   halt_reason_q;
+  logic         last_fault_q;
+  logic [31:0]  last_fault_pc_q;
+  logic [31:0]  last_fault_addr_q;
+  logic [31:0]  last_illegal_inst_q;
+  logic         core_halted;
+  logic         can_halt_boundary;
+  logic [31:0]  dbg_gpr_rdata;
+  logic         dbg_gpr_we;
 
   logic core_hold;
   logic if1_stall;
@@ -120,6 +153,7 @@ module neocorefx_core
   logic [3:0]  idex_rs2_addr;
   logic [31:0] idex_rs1_data;
   logic [31:0] idex_rs2_data;
+  logic [31:0] idex_inst;
   logic [31:0] idex_imm;
   logic [4:0]  idex_alu_op;
   logic        idex_alu_src_imm;
@@ -208,8 +242,12 @@ module neocorefx_core
   assign mem_wait_stall = mem_stall_req;
   assign load_use_stall = load_use_stall_o;
 
+  assign core_halted = (dbg_state_q == DBG_HALTED);
+  assign can_halt_boundary = wb_valid && !mem_wait_stall;
+
   // "Pulseflow" control style: frontend can freeze while backend drains.
-  assign core_hold = !run_i || halted_q;
+  assign core_hold = !run_i || core_halted;
+  assign dbg_gpr_we = dbg_gpr_we_i && core_halted;
 
   assign if1_stall = core_hold || mem_wait_stall || load_use_stall;
   assign if2_stall = core_hold || mem_wait_stall || load_use_stall;
@@ -332,6 +370,7 @@ module neocorefx_core
     .idex_rs2_addr_o    (idex_rs2_addr),
     .idex_rs1_data_o    (idex_rs1_data),
     .idex_rs2_data_o    (idex_rs2_data),
+    .idex_inst_o        (idex_inst),
     .idex_imm_o         (idex_imm),
     .idex_alu_op_o      (idex_alu_op),
     .idex_alu_src_imm_o (idex_alu_src_imm),
@@ -472,7 +511,12 @@ module neocorefx_core
     .rs2_data_o         (rf_rs2_data),
     .we_i               (rf_we),
     .waddr_i            (rf_waddr),
-    .wdata_i            (rf_wdata)
+    .wdata_i            (rf_wdata),
+    .dbg_raddr_i        (dbg_gpr_addr_i),
+    .dbg_rdata_o        (dbg_gpr_rdata),
+    .dbg_we_i           (dbg_gpr_we),
+    .dbg_waddr_i        (dbg_gpr_addr_i),
+    .dbg_wdata_i        (dbg_gpr_wdata_i)
   );
 
   // ============================================================================
@@ -481,9 +525,72 @@ module neocorefx_core
 
   always_ff @(posedge clk) begin
     if (rst) begin
-      halted_q <= 1'b0;
-    end else if (wb_halted_pulse) begin
-      halted_q <= 1'b1;
+      dbg_state_q <= DBG_RUN;
+      halt_reason_q <= HALT_REASON_NONE;
+      last_fault_q <= 1'b0;
+      last_fault_pc_q <= 32'h0000_0000;
+      last_fault_addr_q <= 32'h0000_0000;
+      last_illegal_inst_q <= 32'h0000_0000;
+    end else begin
+      if (idex_valid && idex_illegal) begin
+        last_illegal_inst_q <= idex_inst;
+      end
+
+      if (wb_fault) begin
+        last_fault_q <= 1'b1;
+        last_fault_pc_q <= if1_pc;
+      end
+
+      if (d_req_o && d_done_i && d_err_i) begin
+        last_fault_addr_q <= d_addr_o;
+      end
+
+      unique case (dbg_state_q)
+        DBG_RUN: begin
+          if (wb_halted_pulse) begin
+            dbg_state_q <= DBG_HALTED;
+            halt_reason_q <= HALT_REASON_B_DOT;
+          end else if (dbg_halt_req_i) begin
+            dbg_state_q <= DBG_HALT_PENDING;
+            halt_reason_q <= HALT_REASON_DEBUG_REQ;
+          end
+        end
+
+        DBG_HALT_PENDING: begin
+          if (wb_halted_pulse) begin
+            dbg_state_q <= DBG_HALTED;
+            halt_reason_q <= HALT_REASON_B_DOT;
+          end else if (dbg_resume_req_i) begin
+            dbg_state_q <= DBG_RUN;
+            halt_reason_q <= HALT_REASON_NONE;
+          end else if (can_halt_boundary) begin
+            dbg_state_q <= DBG_HALTED;
+          end
+        end
+
+        DBG_HALTED: begin
+          if (dbg_resume_req_i) begin
+            dbg_state_q <= DBG_RUN;
+            halt_reason_q <= HALT_REASON_NONE;
+          end else if (dbg_step_req_i) begin
+            dbg_state_q <= DBG_STEP_PENDING;
+            halt_reason_q <= HALT_REASON_DEBUG_STEP;
+          end
+        end
+
+        default: begin
+          if (wb_halted_pulse) begin
+            dbg_state_q <= DBG_HALTED;
+            halt_reason_q <= HALT_REASON_B_DOT;
+          end else if (dbg_halt_req_i) begin
+            dbg_state_q <= DBG_HALT_PENDING;
+            halt_reason_q <= HALT_REASON_DEBUG_REQ;
+          end else if (can_halt_boundary) begin
+            dbg_state_q <= DBG_HALTED;
+            halt_reason_q <= HALT_REASON_DEBUG_STEP;
+          end
+        end
+      endcase
     end
   end
 
@@ -494,7 +601,7 @@ module neocorefx_core
       branch_redirect_count <= 32'h0000_0000;
       load_stall_count <= 32'h0000_0000;
       mem_stall_count <= 32'h0000_0000;
-    end else if (run_i && !halted_q) begin
+    end else if (run_i && !core_halted) begin
       cycle_count <= cycle_count + 32'd1;
 
       if (wb_valid) begin
@@ -512,8 +619,14 @@ module neocorefx_core
     end
   end
 
-  assign halted_o = halted_q;
+  assign halted_o = core_halted;
   assign current_pc_o = if1_pc;
+  assign dbg_gpr_rdata_o = dbg_gpr_rdata;
+  assign dbg_halt_reason_o = halt_reason_q;
+  assign dbg_last_fault_o = last_fault_q;
+  assign dbg_last_fault_pc_o = last_fault_pc_q;
+  assign dbg_last_fault_addr_o = last_fault_addr_q;
+  assign dbg_last_illegal_inst_o = last_illegal_inst_q;
 
   assign wb_valid_o = wb_valid;
   assign wb_fault_o = wb_fault;

@@ -33,8 +33,14 @@ module neocorefx_fpga_top (
   logic clk_40mhz;
   logic pll_locked;
   logic soc_rst_btn_n;
+  logic btn0_sync_ff1 = 1'b0;
+  logic btn0_sync_ff2 = 1'b0;
+  logic rst_btn_n_q = 1'b0;
+  logic [18:0] rst_hold_ctr_q = 19'd400_000;
   logic [24:0] heartbeat;
   logic unused_ftdi_inputs;
+
+  localparam int unsigned RST_HOLD_CYCLES = 19'd400_000; // 10 ms @ 40 MHz.
 
   neocorefx_pll_40mhz u_pll (
     .clk_i    (clk_25mhz),
@@ -42,12 +48,34 @@ module neocorefx_fpga_top (
     .locked_o (pll_locked)
   );
 
-  assign soc_rst_btn_n = btn[0] & pll_locked;
+  assign soc_rst_btn_n = rst_btn_n_q;
   assign unused_ftdi_inputs = ftdi_nrts ^ ftdi_ndtr ^ ftdi_txden ^ ftdi_nrxled;
 
   // Keep a free-running heartbeat separate from core status.
   always_ff @(posedge clk_40mhz) begin
     heartbeat <= heartbeat + 25'd1;
+  end
+
+  // Reset conditioner:
+  // - synchronize raw button into clk_40mhz domain
+  // - assert reset immediately on button press
+  // - hold reset low for a fixed interval after release to absorb bounce
+  always_ff @(posedge clk_40mhz) begin
+    btn0_sync_ff1 <= btn[0];
+    btn0_sync_ff2 <= btn0_sync_ff1;
+
+    if (!pll_locked) begin
+      rst_btn_n_q <= 1'b0;
+      rst_hold_ctr_q <= RST_HOLD_CYCLES;
+    end else if (!btn0_sync_ff2) begin
+      rst_btn_n_q <= 1'b0;
+      rst_hold_ctr_q <= RST_HOLD_CYCLES;
+    end else if (rst_hold_ctr_q != 0) begin
+      rst_btn_n_q <= 1'b0;
+      rst_hold_ctr_q <= rst_hold_ctr_q - 19'd1;
+    end else begin
+      rst_btn_n_q <= 1'b1;
+    end
   end
 
   neocorefx_top u_soc (

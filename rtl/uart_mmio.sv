@@ -3,7 +3,9 @@
 // NeoCoreFX - MMIO UART (TX serializer + RX deserializer + register block)
 //
 
-module uart_mmio (
+module uart_mmio #(
+    parameter bit STREAM_MODE = 1'b0
+) (
     input  logic        clk,
     input  logic        rst,
 
@@ -18,7 +20,15 @@ module uart_mmio (
     output logic        err_o,
 
     input  logic        uart_rx_i,
-    output logic        uart_tx_o
+    output logic        uart_tx_o,
+
+    input  logic        stream_rx_valid_i,
+    input  logic [7:0]  stream_rx_data_i,
+    output logic        stream_rx_ready_o,
+
+    output logic        stream_tx_valid_o,
+    output logic [7:0]  stream_tx_data_o,
+    input  logic        stream_tx_ready_i
 );
     timeunit 1ns;
     timeprecision 1ps;
@@ -36,7 +46,8 @@ module uart_mmio (
     localparam logic [5:0] UART_REG_BAUDDIV = UART_BAUDDIV_OFFSET[7:2];
 
 `ifdef SYNTHESIS
-    localparam logic [31:0] UART_BAUDDIV_RESET = 32'd217;
+    // 40 MHz fabric clock -> 115200 baud => divider ~= (40e6 / 115200) - 1 = 346.
+    localparam logic [31:0] UART_BAUDDIV_RESET = 32'd346;
 `else
     // Faster default for simulation so benchmark logging does not dominate runtime.
     localparam logic [31:0] UART_BAUDDIV_RESET = 32'd8;
@@ -94,7 +105,10 @@ module uart_mmio (
         end
     endfunction
 
-    assign uart_tx_o = tx_active_q ? tx_shift_q[tx_bit_idx_q] : 1'b1;
+    assign uart_tx_o = STREAM_MODE ? 1'b1 : (tx_active_q ? tx_shift_q[tx_bit_idx_q] : 1'b1);
+    assign stream_rx_ready_o = ctrl_q[1] && !rx_valid_q;
+    assign stream_tx_valid_o = STREAM_MODE && ctrl_q[0] && (tx_count_q != 0);
+    assign stream_tx_data_o = stream_tx_valid_o ? tx_fifo[tx_rd_ptr_q] : 8'h00;
 
 `ifndef SYNTHESIS
     always @(posedge clk) begin
@@ -206,79 +220,98 @@ module uart_mmio (
 
             bauddiv_eff = (bauddiv_q == 32'd0) ? 32'd1 : bauddiv_q;
 
-            // TX engine consumes one FIFO byte whenever idle and enabled.
-            if (tx_active_q) begin
-                if (tx_baud_cnt_q >= bauddiv_eff) begin
-                    tx_baud_cnt_n = 32'd0;
-                    if (tx_bit_idx_q == 4'd9) begin
-                        tx_active_n = 1'b0;
-                        tx_bit_idx_n = 4'd0;
-                    end else begin
-                        tx_bit_idx_n = tx_bit_idx_q + 4'd1;
-                    end
-                end else begin
-                    tx_baud_cnt_n = tx_baud_cnt_q + 32'd1;
-                end
-            end else begin
+            if (STREAM_MODE) begin
+                tx_active_n = 1'b0;
+                tx_shift_n = 10'h3FF;
+                tx_bit_idx_n = 4'd0;
                 tx_baud_cnt_n = 32'd0;
-                if (ctrl_q[0] && (tx_count_q != 0)) begin
-                    logic [7:0] tx_launch_byte;
-                    tx_launch_byte = tx_fifo[tx_rd_ptr_q];
-                    tx_active_n = 1'b1;
-                    tx_shift_n = {1'b1, tx_launch_byte, 1'b0};
-                    tx_bit_idx_n = 4'd0;
+                if (ctrl_q[0] && (tx_count_q != 0) && stream_tx_ready_i) begin
                     tx_rd_ptr_n = tx_rd_ptr_q + 1'b1;
                     tx_count_n = tx_count_q - 1'b1;
+                end
+            end else begin
+                // TX engine consumes one FIFO byte whenever idle and enabled.
+                if (tx_active_q) begin
+                    if (tx_baud_cnt_q >= bauddiv_eff) begin
+                        tx_baud_cnt_n = 32'd0;
+                        if (tx_bit_idx_q == 4'd9) begin
+                            tx_active_n = 1'b0;
+                            tx_bit_idx_n = 4'd0;
+                        end else begin
+                            tx_bit_idx_n = tx_bit_idx_q + 4'd1;
+                        end
+                    end else begin
+                        tx_baud_cnt_n = tx_baud_cnt_q + 32'd1;
+                    end
+                end else begin
+                    tx_baud_cnt_n = 32'd0;
+                    if (ctrl_q[0] && (tx_count_q != 0)) begin
+                        logic [7:0] tx_launch_byte;
+                        tx_launch_byte = tx_fifo[tx_rd_ptr_q];
+                        tx_active_n = 1'b1;
+                        tx_shift_n = {1'b1, tx_launch_byte, 1'b0};
+                        tx_bit_idx_n = 4'd0;
+                        tx_rd_ptr_n = tx_rd_ptr_q + 1'b1;
+                        tx_count_n = tx_count_q - 1'b1;
+                    end
                 end
             end
 
             // ----------------------------------------------------------------
             // RX deserializer engine
             // ----------------------------------------------------------------
+            if (STREAM_MODE) begin
+                rx_sync1_q <= 1'b1;
+                rx_sync2_q <= 1'b1;
+                rx_active_q <= 1'b0;
+                rx_shift_q <= 8'h00;
+                rx_bit_idx_q <= 4'd0;
+                rx_baud_cnt_q <= 32'd0;
+            end else begin
+                // 2-FF synchronizer for metastability on uart_rx_i
+                rx_sync1_q <= uart_rx_i;
+                rx_sync2_q <= rx_sync1_q;
 
-            // 2-FF synchronizer for metastability on uart_rx_i
-            rx_sync1_q <= uart_rx_i;
-            rx_sync2_q <= rx_sync1_q;
-
-            if (rx_active_q) begin
-                if (rx_baud_cnt_q >= bauddiv_eff) begin
-                    rx_baud_cnt_q <= 32'd0;
-                    if (rx_bit_idx_q == 4'd0) begin
-                        // Mid-point of start bit -- verify it is still low.
-                        if (rx_sync2_q == 1'b0) begin
-                            rx_bit_idx_q <= 4'd1;
-                        end else begin
-                            // False start: abort.
-                            rx_active_q <= 1'b0;
-                        end
-                    end else if (rx_bit_idx_q <= 4'd8) begin
-                        // Data bits 1..8: shift in LSB-first.
-                        rx_shift_q <= {rx_sync2_q, rx_shift_q[7:1]};
-                        rx_bit_idx_q <= rx_bit_idx_q + 4'd1;
-                    end else begin
-                        // Stop bit (bit_idx == 9).
-                        rx_active_q <= 1'b0;
-                        if (rx_sync2_q == 1'b1 && ctrl_q[1]) begin
-                            // Valid stop bit & RX enabled -> deliver byte.
-                            if (rx_valid_n) begin
-                                rx_overrun_n = 1'b1;
+                if (rx_active_q) begin
+                    if (rx_baud_cnt_q >= bauddiv_eff) begin
+                        rx_baud_cnt_q <= 32'd0;
+                        if (rx_bit_idx_q == 4'd0) begin
+                            // Mid-point of start bit -- verify it is still low.
+                            if (rx_sync2_q == 1'b0) begin
+                                rx_bit_idx_q <= 4'd1;
+                            end else begin
+                                // False start: abort.
+                                rx_active_q <= 1'b0;
                             end
-                            rx_data_n = rx_shift_q;
-                            rx_valid_n = 1'b1;
+                        end else if (rx_bit_idx_q <= 4'd8) begin
+                            // Data bits 1..8: shift in LSB-first.
+                            rx_shift_q <= {rx_sync2_q, rx_shift_q[7:1]};
+                            rx_bit_idx_q <= rx_bit_idx_q + 4'd1;
+                        end else begin
+                            // Stop bit (bit_idx == 9).
+                            rx_active_q <= 1'b0;
+                            if (rx_sync2_q == 1'b1 && ctrl_q[1]) begin
+                                // Valid stop bit & RX enabled -> deliver byte.
+                                if (rx_valid_n) begin
+                                    rx_overrun_n = 1'b1;
+                                end
+                                rx_data_n = rx_shift_q;
+                                rx_valid_n = 1'b1;
+                            end
+                            // If stop bit is low (framing error), silently drop.
                         end
-                        // If stop bit is low (framing error), silently drop.
+                    end else begin
+                        rx_baud_cnt_q <= rx_baud_cnt_q + 32'd1;
                     end
                 end else begin
-                    rx_baud_cnt_q <= rx_baud_cnt_q + 32'd1;
-                end
-            end else begin
-                // Idle: detect falling edge (start bit).
-                if (rx_sync2_q == 1'b0) begin
-                    rx_active_q <= 1'b1;
-                    rx_bit_idx_q <= 4'd0;
-                    rx_shift_q <= 8'h00;
-                    // Start sampling at half a bit period to reach mid-bit.
-                    rx_baud_cnt_q <= bauddiv_eff >> 1;
+                    // Idle: detect falling edge (start bit).
+                    if (rx_sync2_q == 1'b0) begin
+                        rx_active_q <= 1'b1;
+                        rx_bit_idx_q <= 4'd0;
+                        rx_shift_q <= 8'h00;
+                        // Start sampling at half a bit period to reach mid-bit.
+                        rx_baud_cnt_q <= bauddiv_eff >> 1;
+                    end
                 end
             end
 
@@ -432,6 +465,18 @@ module uart_mmio (
                         req_wait_cycle_n = 1'b0;
                     end
                 endcase
+            end
+
+            // External byte injection path for virtual-console mode.
+            if (STREAM_MODE && stream_rx_valid_i) begin
+                if (!ctrl_n[1]) begin
+                    // RX disabled: drop silently.
+                end else if (rx_valid_n) begin
+                    rx_overrun_n = 1'b1;
+                end else begin
+                    rx_data_n = stream_rx_data_i;
+                    rx_valid_n = 1'b1;
+                end
             end
 
             tx_wr_ptr_q <= tx_wr_ptr_n;

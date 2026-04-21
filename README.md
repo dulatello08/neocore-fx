@@ -106,6 +106,22 @@ Implemented D-Bus MMIO decode includes UART at `0x4000_0000`.
 
 For simulation logging, pass `+UART_STDOUT` (via `VVP_ARGS`) to mirror transmitted bytes to console.
 
+## Hardware Debug Interface (v2)
+
+Implemented hardware debug surface now includes:
+
+- Debug MMIO register block at `0x4000_0300` (`docs/debug_mmio.h`).
+- External UART debug agent (`ncdb`) that permanently owns physical UART pins.
+- Firmware-facing virtual UART console FIFO behind `ncdb`.
+- Parser rule: valid debug frames are consumed; everything else is passed to firmware RX.
+- Core debug controls: precise `halt` / `resume` / `step`, halted-only GPR/memory mutation, and mirrored performance counters.
+
+See:
+
+- [docs/debug-interface.md](docs/debug-interface.md)
+- [docs/debug_mmio.h](docs/debug_mmio.h)
+- `scripts/ncdb.py`
+
 One-command generic loader helper:
 
 ```bash

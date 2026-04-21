@@ -38,10 +38,6 @@ module tb_halt_path;
     logic        mem_valid_hz;
     logic [3:0]  mem_rd_hz;
     logic        mem_reg_write_hz;
-    logic        wb_valid_hz;
-    logic [3:0]  wb_rd_hz;
-    logic        wb_reg_write_hz;
-
     // ID -> EXE bundle.
     logic        idex_valid;
     logic [31:0] idex_pc;
@@ -50,6 +46,7 @@ module tb_halt_path;
     logic [3:0]  idex_rs2_addr;
     logic [31:0] idex_rs1_data;
     logic [31:0] idex_rs2_data;
+    logic [31:0] idex_inst;
     logic [31:0] idex_imm;
     logic [4:0]  idex_alu_op;
     logic        idex_alu_src_imm;
@@ -156,9 +153,6 @@ module tb_halt_path;
         .mem_valid_i        (mem_valid_hz),
         .mem_rd_i           (mem_rd_hz),
         .mem_reg_write_i    (mem_reg_write_hz),
-        .wb_valid_i         (wb_valid_hz),
-        .wb_rd_i            (wb_rd_hz),
-        .wb_reg_write_i     (wb_reg_write_hz),
         .load_use_stall_o   (load_use_stall),
         .idex_valid_o       (idex_valid),
         .idex_pc_o          (idex_pc),
@@ -167,6 +161,7 @@ module tb_halt_path;
         .idex_rs2_addr_o    (idex_rs2_addr),
         .idex_rs1_data_o    (idex_rs1_data),
         .idex_rs2_data_o    (idex_rs2_data),
+        .idex_inst_o        (idex_inst),
         .idex_imm_o         (idex_imm),
         .idex_alu_op_o      (idex_alu_op),
         .idex_alu_src_imm_o (idex_alu_src_imm),
@@ -335,10 +330,6 @@ module tb_halt_path;
         mem_valid_hz = 1'b0;
         mem_rd_hz = 4'h0;
         mem_reg_write_hz = 1'b0;
-        wb_valid_hz = 1'b0;
-        wb_rd_hz = 4'h0;
-        wb_reg_write_hz = 1'b0;
-
         exe_stall = 1'b0;
         exe_flush = 1'b0;
         mem_fwd_data = 32'h0000_0000;

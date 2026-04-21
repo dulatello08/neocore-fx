@@ -40,6 +40,16 @@ FRONTEND_TIMING_TOP ?= tb_frontend_timing
 FRONTEND_TIMING_BUILD_DIR ?= $(BUILD_ROOT)/sim_frontend_timing
 FRONTEND_TIMING_BIN ?= $(FRONTEND_TIMING_BUILD_DIR)/tb_frontend_timing_simv
 
+DEBUG_MMIO_FILELIST ?= filelists/sim_debug_mmio.f
+DEBUG_MMIO_TOP ?= tb_debug_mmio
+DEBUG_MMIO_BUILD_DIR ?= $(BUILD_ROOT)/sim_debug_mmio
+DEBUG_MMIO_BIN ?= $(DEBUG_MMIO_BUILD_DIR)/tb_debug_mmio_simv
+
+DEBUG_UART_ROUTER_FILELIST ?= filelists/sim_debug_uart_claim.f
+DEBUG_UART_ROUTER_TOP ?= tb_debug_uart_claim
+DEBUG_UART_ROUTER_BUILD_DIR ?= $(BUILD_ROOT)/sim_debug_uart_router
+DEBUG_UART_ROUTER_BIN ?= $(DEBUG_UART_ROUTER_BUILD_DIR)/tb_debug_uart_router_simv
+
 MEM_FILELIST ?= filelists/sim_mem.f
 MEM_TOP ?= tb_mem
 MEM_BUILD_DIR ?= $(BUILD_ROOT)/sim_mem
@@ -113,7 +123,8 @@ FPGA_EXTRA_FLAGS += --seed $(NEXTPNR_SEED) --report $(FPGA_BUILD_DIR)/report_$(N
 	forward-hazard-build forward-hazard-run \
 	mem-build mem-run run_mem run_mem_random \
 	frontend-timing-build frontend-timing-run \
-	run_smoke run_any run_forward_hazard run_frontend_timing profile_any debug_any waves_any \
+	debug-mmio-build debug-mmio-run debug-uart-router-build debug-uart-router-run \
+	run_smoke run_any run_forward_hazard run_frontend_timing run_debug_mmio run_debug_uart_router run_debug_uart_claim profile_any debug_any waves_any \
 	smoke-hex bin2hex wordhex2byte bytehex2word \
 	fpga fpga-program fpga-list clean clobber
 
@@ -128,6 +139,8 @@ help:
 	@printf "  $(CLR_GREEN)make run_mem_random$(CLR_RESET) Run memory TB with randomized BRAM init image\n"
 	@printf "  $(CLR_GREEN)make run_forward_hazard$(CLR_RESET) Run forwarding-hazard regression TB\n"
 	@printf "  $(CLR_GREEN)make run_frontend_timing$(CLR_RESET) Run frontend stall+redirect timing TB\n"
+	@printf "  $(CLR_GREEN)make run_debug_mmio$(CLR_RESET) Run debug MMIO block testbench\n"
+	@printf "  $(CLR_GREEN)make run_debug_uart_router$(CLR_RESET) Run ncdb UART router testbench\n"
 	@printf "  $(CLR_GREEN)make profile_any$(CLR_RESET) Run generic TB with +PROFILE stats\n"
 	@printf "  $(CLR_GREEN)make debug_any$(CLR_RESET)  Run generic TB with +DEBUG trace\n"
 	@printf "  $(CLR_GREEN)make waves_any$(CLR_RESET)  Run generic TB with +WAVES dump\n"
@@ -324,6 +337,48 @@ frontend-timing-run: frontend-timing-build
 
 run_frontend_timing: frontend-timing-run
 
+debug-mmio-build: check-sim
+	$(call banner,DEBUG MMIO BUILD)
+	@mkdir -p $(DEBUG_MMIO_BUILD_DIR)
+	@$(PYTHON) $(SIM_HELPER) build \
+		--filelist $(DEBUG_MMIO_FILELIST) \
+		--out $(DEBUG_MMIO_BIN) \
+		--top $(DEBUG_MMIO_TOP) \
+		--iverilog $(IVERILOG) \
+		--flags "$(IVERILOG_FLAGS)" \
+		--build-dir $(DEBUG_MMIO_BUILD_DIR)
+
+debug-mmio-run: debug-mmio-build
+	$(call banner,DEBUG MMIO RUN)
+	@$(PYTHON) $(SIM_HELPER) run \
+		--sim $(DEBUG_MMIO_BIN) \
+		--vvp $(VVP) \
+		--vvp-args "$(VVP_ARGS)"
+
+run_debug_mmio: debug-mmio-run
+
+debug-uart-router-build: check-sim
+	$(call banner,DEBUG UART ROUTER BUILD)
+	@mkdir -p $(DEBUG_UART_ROUTER_BUILD_DIR)
+	@$(PYTHON) $(SIM_HELPER) build \
+		--filelist $(DEBUG_UART_ROUTER_FILELIST) \
+		--out $(DEBUG_UART_ROUTER_BIN) \
+		--top $(DEBUG_UART_ROUTER_TOP) \
+		--iverilog $(IVERILOG) \
+		--flags "$(IVERILOG_FLAGS)" \
+		--build-dir $(DEBUG_UART_ROUTER_BUILD_DIR)
+
+debug-uart-router-run: debug-uart-router-build
+	$(call banner,DEBUG UART ROUTER RUN)
+	@$(PYTHON) $(SIM_HELPER) run \
+		--sim $(DEBUG_UART_ROUTER_BIN) \
+		--vvp $(VVP) \
+		--vvp-args "$(VVP_ARGS)"
+
+run_debug_uart_router: debug-uart-router-run
+
+run_debug_uart_claim: debug-uart-router-run
+	
 profile_any: core-any-build
 	$(call banner,CORE ANY PROFILE)
 	@if [ ! -f "$(PROGRAM)" ]; then \

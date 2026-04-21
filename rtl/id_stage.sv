@@ -49,6 +49,7 @@ module id_stage
     output logic [3:0]  idex_rs2_addr_o,
     output logic [31:0] idex_rs1_data_o,
     output logic [31:0] idex_rs2_data_o,
+    output logic [31:0] idex_inst_o,
     output logic [31:0] idex_imm_o,
     output logic [4:0]  idex_alu_op_o,
     output logic        idex_alu_src_imm_o,
@@ -368,6 +369,7 @@ module id_stage
             idex_rs2_addr_o      <= 4'h0;
             idex_rs1_data_o      <= 32'h0000_0000;
             idex_rs2_data_o      <= 32'h0000_0000;
+            idex_inst_o          <= 32'h0000_0000;
             idex_imm_o           <= 32'h0000_0000;
             idex_alu_op_o        <= ALU_ADD;
             idex_alu_src_imm_o   <= 1'b0;
@@ -396,6 +398,7 @@ module id_stage
             idex_rs2_addr_o      <= 4'h0;
             idex_rs1_data_o      <= 32'h0000_0000;
             idex_rs2_data_o      <= 32'h0000_0000;
+            idex_inst_o          <= 32'h0000_0000;
             idex_imm_o           <= 32'h0000_0000;
             idex_alu_op_o        <= ALU_ADD;
             idex_alu_src_imm_o   <= 1'b0;
@@ -425,6 +428,7 @@ module id_stage
                 idex_rs2_addr_o      <= 4'h0;
                 idex_rs1_data_o      <= 32'h0000_0000;
                 idex_rs2_data_o      <= 32'h0000_0000;
+                idex_inst_o          <= 32'h0000_0000;
                 idex_imm_o           <= 32'h0000_0000;
                 idex_alu_op_o        <= ALU_ADD;
                 idex_alu_src_imm_o   <= 1'b0;
@@ -453,6 +457,7 @@ module id_stage
                 idex_rs2_addr_o      <= rs2_d;
                 idex_rs1_data_o      <= rf_rs1_data_i;
                 idex_rs2_data_o      <= rf_rs2_data_i;
+                idex_inst_o          <= if2_inst_i;
                 idex_imm_o           <= imm_d;
                 idex_alu_op_o        <= alu_op_d;
                 idex_alu_src_imm_o   <= alu_src_imm_d;

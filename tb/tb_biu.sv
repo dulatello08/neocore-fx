@@ -54,6 +54,8 @@ module tb_biu;
     logic        dbus_ack;
     logic [31:0] dbus_rdata;
     logic        dbus_err;
+    logic        uart_rx;
+    logic        uart_tx;
 
     // Scoreboard counters.
     int pass_count;
@@ -111,7 +113,29 @@ module tb_biu;
         .dbus_sel   (dbus_sel),
         .dbus_ack   (dbus_ack),
         .dbus_rdata (dbus_rdata),
-        .dbus_err   (dbus_err)
+        .dbus_err   (dbus_err),
+        .debug_enable_i(1'b0),
+        .core_halted_i(1'b0),
+        .core_current_pc_i(32'h0000_0000),
+        .core_halt_reason_i(3'b000),
+        .core_last_fault_i(1'b0),
+        .core_last_fault_pc_i(32'h0000_0000),
+        .core_last_fault_addr_i(32'h0000_0000),
+        .core_last_illegal_inst_i(32'h0000_0000),
+        .core_cycle_count_i(32'h0000_0000),
+        .core_retire_count_i(32'h0000_0000),
+        .core_redirect_count_i(32'h0000_0000),
+        .core_load_stall_count_i(32'h0000_0000),
+        .core_mem_stall_count_i(32'h0000_0000),
+        .dbg_halt_req_o(),
+        .dbg_resume_req_o(),
+        .dbg_step_req_o(),
+        .dbg_gpr_addr_o(),
+        .dbg_gpr_rdata_i(32'h0000_0000),
+        .dbg_gpr_we_o(),
+        .dbg_gpr_wdata_o(),
+        .uart_rx_i  (uart_rx),
+        .uart_tx_o  (uart_tx)
     );
 
     always begin
@@ -212,6 +236,7 @@ module tb_biu;
 
         clk = 1'b0;
         rst = 1'b1;
+        uart_rx = 1'b1;
 
         i_req = 1'b0;
         i_addr = 32'h0;
