@@ -46,6 +46,8 @@ module mem (
     output logic        dbg_halt_req_o,
     output logic        dbg_resume_req_o,
     output logic        dbg_step_req_o,
+    output logic        dbg_pc_set_req_o,
+    output logic [31:0] dbg_pc_set_data_o,
     output logic [3:0]  dbg_gpr_addr_o,
     input  logic [31:0] dbg_gpr_rdata_i,
     output logic        dbg_gpr_we_o,
@@ -90,6 +92,8 @@ module mem (
     logic mmio_halt_req;
     logic mmio_resume_req;
     logic mmio_step_req;
+    logic mmio_pc_set_req;
+    logic [31:0] mmio_pc_set_data;
     logic [3:0] mmio_gpr_addr;
     logic mmio_gpr_we;
     logic [31:0] mmio_gpr_wdata;
@@ -121,6 +125,8 @@ module mem (
     logic uart_halt_req;
     logic uart_resume_req;
     logic uart_step_req;
+    logic uart_pc_set_req;
+    logic [31:0] uart_pc_set_data;
     logic [3:0] uart_gpr_addr;
     logic uart_gpr_we;
     logic [31:0] uart_gpr_wdata;
@@ -233,6 +239,8 @@ module mem (
     assign dbg_halt_req_o = mmio_halt_req || (debug_enable_i && uart_halt_req);
     assign dbg_resume_req_o = mmio_resume_req || (debug_enable_i && uart_resume_req);
     assign dbg_step_req_o = mmio_step_req || (debug_enable_i && uart_step_req);
+    assign dbg_pc_set_req_o = mmio_pc_set_req || (debug_enable_i && uart_pc_set_req);
+    assign dbg_pc_set_data_o = (debug_enable_i && uart_pc_set_req) ? uart_pc_set_data : mmio_pc_set_data;
 
     assign dbg_gpr_addr_o = uart_debug_active_eff ? uart_gpr_addr : mmio_gpr_addr;
     assign dbg_gpr_we_o = mmio_gpr_we || (debug_enable_i && uart_gpr_we);
@@ -368,6 +376,8 @@ module mem (
         .halt_req_o             (mmio_halt_req),
         .resume_req_o           (mmio_resume_req),
         .step_req_o             (mmio_step_req),
+        .pc_set_req_o           (mmio_pc_set_req),
+        .pc_set_data_o          (mmio_pc_set_data),
         .gpr_addr_o             (mmio_gpr_addr),
         .gpr_rdata_i            (dbg_gpr_rdata_i),
         .gpr_we_o               (mmio_gpr_we),
@@ -411,6 +421,8 @@ module mem (
         .halt_req_o             (uart_halt_req),
         .resume_req_o           (uart_resume_req),
         .step_req_o             (uart_step_req),
+        .pc_set_req_o           (uart_pc_set_req),
+        .pc_set_data_o          (uart_pc_set_data),
         .gpr_addr_o             (uart_gpr_addr),
         .gpr_rdata_i            (dbg_gpr_rdata_i),
         .gpr_we_o               (uart_gpr_we),

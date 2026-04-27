@@ -28,6 +28,8 @@ module tb_debug_mmio;
     logic halt_req;
     logic resume_req;
     logic step_req;
+    logic pc_set_req;
+    logic [31:0] pc_set_data;
 
     logic [3:0] gpr_addr;
     logic [31:0] gpr_rdata;
@@ -50,6 +52,7 @@ module tb_debug_mmio;
     logic dbg_mem_err;
     logic halt_seen;
     logic gpr_we_seen;
+    logic pc_set_seen;
 
     int pass_count;
     int fail_count;
@@ -75,6 +78,8 @@ module tb_debug_mmio;
         .halt_req_o             (halt_req),
         .resume_req_o           (resume_req),
         .step_req_o             (step_req),
+        .pc_set_req_o           (pc_set_req),
+        .pc_set_data_o          (pc_set_data),
         .gpr_addr_o             (gpr_addr),
         .gpr_rdata_i            (gpr_rdata),
         .gpr_we_o               (gpr_we),
@@ -102,9 +107,11 @@ module tb_debug_mmio;
         if (rst) begin
             halt_seen <= 1'b0;
             gpr_we_seen <= 1'b0;
+            pc_set_seen <= 1'b0;
         end else begin
             if (halt_req) halt_seen <= 1'b1;
             if (gpr_we) gpr_we_seen <= 1'b1;
+            if (pc_set_req) pc_set_seen <= 1'b1;
         end
     end
 
@@ -225,6 +232,12 @@ module tb_debug_mmio;
         #1;
         check_true(halt_seen, "halt request pulse");
 
+        // PC set is blocked when not halted.
+        pc_set_seen = 1'b0;
+        bus_write(DEBUG_BASE_ADDR + DEBUG_PC_OFFSET, 32'h0000_2200);
+        #1;
+        check_true(!pc_set_seen, "pc-set blocked while running");
+
         // GPR write is blocked when not halted.
         bus_write(DEBUG_BASE_ADDR + DEBUG_GPR_IDX_OFFSET, 32'h0000_0003);
         bus_write(DEBUG_BASE_ADDR + DEBUG_GPR_WDATA_OFFSET, 32'h1234_5678);
@@ -242,6 +255,14 @@ module tb_debug_mmio;
         check_true(gpr_we_seen, "gpr write allowed while halted");
         check_true(gpr_addr == 4'h3, "gpr index forwarded");
         check_eq32(gpr_wdata, 32'h1234_5678, "gpr data forwarded");
+
+        // PC set is allowed while halted and aligned to word boundary.
+        pc_set_seen = 1'b0;
+        bus_write(DEBUG_BASE_ADDR + DEBUG_PC_OFFSET, 32'h0000_2202);
+        repeat (2) @(posedge clk);
+        #1;
+        check_true(pc_set_seen, "pc-set pulse while halted");
+        check_eq32(pc_set_data, 32'h0000_2200, "pc-set data aligned");
 
         // Launch debug memory read command and complete it.
         bus_write(DEBUG_BASE_ADDR + DEBUG_MEM_ADDR_OFFSET, 32'h0000_0100);

@@ -9,7 +9,6 @@
 #define NCX_UART_RXDATA_REG  (*(volatile uint32_t *)(NCX_UART_BASE_ADDR + 0x04u))
 #define NCX_UART_STATUS_REG  (*(volatile uint32_t *)(NCX_UART_BASE_ADDR + 0x08u))
 #define NCX_UART_CTRL_REG    (*(volatile uint32_t *)(NCX_UART_BASE_ADDR + 0x0Cu))
-#define NCX_UART_BAUDDIV_REG (*(volatile uint32_t *)(NCX_UART_BASE_ADDR + 0x10u))
 
 #define NCX_UART_STATUS_TX_READY   (1u << 0)
 #define NCX_UART_STATUS_RX_VALID   (1u << 1)
@@ -19,10 +18,10 @@
 #define NCX_UART_CTRL_TX_EN (1u << 0)
 #define NCX_UART_CTRL_RX_EN (1u << 1)
 
-static inline void ncx_uart_init(uint32_t bauddiv)
+static inline void ncx_uart_init(void)
 {
     NCX_UART_CTRL_REG = NCX_UART_CTRL_TX_EN | NCX_UART_CTRL_RX_EN;
-    NCX_UART_BAUDDIV_REG = bauddiv;
+    /* Virtual UART endpoint has no firmware-controlled baud divider. */
     NCX_UART_STATUS_REG = NCX_UART_STATUS_TX_OVERRUN | NCX_UART_STATUS_RX_OVERRUN;
 }
 

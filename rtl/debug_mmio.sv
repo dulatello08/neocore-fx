@@ -29,6 +29,8 @@ module debug_mmio (
     output logic        halt_req_o,
     output logic        resume_req_o,
     output logic        step_req_o,
+    output logic        pc_set_req_o,
+    output logic [31:0] pc_set_data_o,
 
     output logic [3:0]  gpr_addr_o,
     input  logic [31:0] gpr_rdata_i,
@@ -58,7 +60,7 @@ module debug_mmio (
     import mem_pkg::*;
 
     localparam logic [31:0] DBG_ID_VALUE = 32'h4E43_4442;      // "NCDB"
-    localparam logic [31:0] DBG_CAPS_VALUE = 32'h0000_001F;    // halt/step/gpr/mem/counters
+    localparam logic [31:0] DBG_CAPS_VALUE = 32'h0000_003F;    // halt/step/pc-set/gpr/mem/counters
     localparam int unsigned DBG_MEM_TIMEOUT_CYCLES = 4096;
 
     localparam logic [1:0] SIZE_BYTE = 2'b00;
@@ -90,7 +92,9 @@ module debug_mmio (
     logic        do_halt_req_d;
     logic        do_resume_req_d;
     logic        do_step_req_d;
+    logic        do_pc_set_req_d;
     logic        do_gpr_we_d;
+    logic [31:0] pc_set_data_q;
 
     logic [31:0] mem_status_word;
 
@@ -132,6 +136,8 @@ module debug_mmio (
     assign halt_req_o = do_halt_req_d;
     assign resume_req_o = do_resume_req_d;
     assign step_req_o = do_step_req_d;
+    assign pc_set_req_o = do_pc_set_req_d;
+    assign pc_set_data_o = pc_set_data_q;
 
     assign gpr_addr_o = gpr_idx_q;
     assign gpr_wdata_o = gpr_wdata_q;
@@ -153,10 +159,12 @@ module debug_mmio (
         logic [7:0] gpr_cmd_byte;
         logic [7:0] mem_cmd_byte;
         logic [7:0] mem_status_w1c;
+        logic [31:0] pc_write_data;
 
         do_halt_req_d = 1'b0;
         do_resume_req_d = 1'b0;
         do_step_req_d = 1'b0;
+        do_pc_set_req_d = 1'b0;
         do_gpr_we_d = 1'b0;
 
         if (rst) begin
@@ -171,6 +179,7 @@ module debug_mmio (
 
             gpr_idx_q <= 4'h0;
             gpr_wdata_q <= 32'h0000_0000;
+            pc_set_data_q <= 32'h0000_0000;
 
             mem_addr_q <= 32'h0000_0000;
             mem_wdata_q <= 32'h0000_0000;
@@ -219,6 +228,7 @@ module debug_mmio (
                 gpr_cmd_byte = cmd_byte;
                 mem_cmd_byte = cmd_byte;
                 mem_status_w1c = cmd_byte;
+                pc_write_data = mem_apply_write_sel(core_pc_i, wdata_i, sel_i);
 
                 if (we_i) begin
                     case (reg_index_d)
@@ -234,6 +244,15 @@ module debug_mmio (
 
                         DEBUG_GPR_WDATA_OFFSET[7:2]: begin
                             gpr_wdata_q <= wdata_i;
+                        end
+
+                        DEBUG_PC_OFFSET[7:2]: begin
+                            if (core_halted_i) begin
+                                pc_set_data_q <= {pc_write_data[31:2], 2'b00};
+                                do_pc_set_req_d = 1'b1;
+                            end else begin
+                                mem_err_sticky_q <= 1'b1;
+                            end
                         end
 
                         DEBUG_GPR_CMD_OFFSET[7:2]: begin

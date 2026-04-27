@@ -5,6 +5,7 @@
 
 #define NCX_DEBUG_BASE_ADDR 0x40000300u
 #define NCX_DEBUG_ID_VALUE 0x4E434442u /* "NCDB" */
+#define NCX_DEBUG_CAPS_VALUE 0x0000003Fu
 
 #define NCX_DEBUG_ID_REG              (*(volatile uint32_t *)(NCX_DEBUG_BASE_ADDR + 0x00u))
 #define NCX_DEBUG_CAPS_REG            (*(volatile uint32_t *)(NCX_DEBUG_BASE_ADDR + 0x04u))
@@ -65,6 +66,11 @@ static inline void ncx_debug_resume(void)
 static inline void ncx_debug_step(void)
 {
     NCX_DEBUG_CTRL_REG = NCX_DEBUG_CTRL_STEP_REQ;
+}
+
+static inline void ncx_debug_set_pc(uint32_t pc)
+{
+    NCX_DEBUG_PC_REG = pc & ~0x3u;
 }
 
 static inline uint32_t ncx_debug_read_gpr(uint32_t idx)

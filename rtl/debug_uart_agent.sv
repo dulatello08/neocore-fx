@@ -33,6 +33,8 @@ module debug_uart_agent #(
     output logic        halt_req_o,
     output logic        resume_req_o,
     output logic        step_req_o,
+    output logic        pc_set_req_o,
+    output logic [31:0] pc_set_data_o,
 
     output logic [3:0]  gpr_addr_o,
     input  logic [31:0] gpr_rdata_i,
@@ -80,12 +82,15 @@ module debug_uart_agent #(
     localparam logic [7:0] CMD_HALT          = 8'h10;
     localparam logic [7:0] CMD_RESUME        = 8'h11;
     localparam logic [7:0] CMD_STEP          = 8'h12;
+    localparam logic [7:0] CMD_SET_PC        = 8'h13;
     localparam logic [7:0] CMD_READ_STATUS   = 8'h20;
     localparam logic [7:0] CMD_READ_GPR      = 8'h21;
     localparam logic [7:0] CMD_WRITE_GPR     = 8'h22;
     localparam logic [7:0] CMD_READ_MEM      = 8'h23;
     localparam logic [7:0] CMD_WRITE_MEM     = 8'h24;
     localparam logic [7:0] CMD_READ_COUNTERS = 8'h25;
+    localparam logic [7:0] CMD_READ_MEM_BURST = 8'h26;
+    localparam logic [7:0] CMD_SET_MEM_BURST  = 8'h27;
 
     localparam logic [7:0] ST_OK         = 8'h00;
     localparam logic [7:0] ST_BAD_CMD    = 8'h02;
@@ -169,9 +174,17 @@ module debug_uart_agent #(
 
     logic [31:0] mem_timeout_ctr_q;
     logic mem_cmd_is_read_q;
+    logic mem_burst_active_q;
+    logic mem_burst_is_set_q;
+    logic [7:0] mem_burst_total_q;
+    logic [7:0] mem_burst_remaining_q;
+    logic [7:0] mem_burst_index_q;
+    logic [31:0] mem_burst_addr_q;
+    logic [31:0] mem_burst_value_q;
 
     logic [3:0] gpr_addr_q;
     logic [31:0] gpr_wdata_q;
+    logic [31:0] pc_set_data_q;
 
     logic dbg_mem_busy_q;
     logic dbg_mem_we_q;
@@ -214,6 +227,16 @@ module debug_uart_agent #(
         return payload_len + 8'd6;
     endfunction
 
+    function automatic logic [31:0] mem_stride_bytes(input logic [1:0] size);
+        begin
+            case (size)
+                SIZE_BYTE: return 32'd1;
+                SIZE_HALF: return 32'd2;
+                default: return 32'd4;
+            endcase
+        end
+    endfunction
+
     task automatic queue_response_no_payload(
         input logic [7:0] seq,
         input logic [7:0] status
@@ -242,6 +265,21 @@ module debug_uart_agent #(
             tx_buf[1] <= word[23:16];
             tx_buf[2] <= word[15:8];
             tx_buf[3] <= word[7:0];
+            tx_idx_q <= 8'd0;
+            tx_active_q <= 1'b1;
+        end
+    endtask
+
+    task automatic queue_response_buffer(
+        input logic [7:0] seq,
+        input logic [7:0] status,
+        input logic [7:0] payload_len
+    );
+        begin
+            tx_seq_q <= seq;
+            tx_status_q <= status;
+            tx_payload_len_q <= payload_len;
+            tx_crc_q <= 16'hFFFF;
             tx_idx_q <= 8'd0;
             tx_active_q <= 1'b1;
         end
@@ -297,6 +335,7 @@ module debug_uart_agent #(
 
     assign gpr_addr_o = gpr_addr_q;
     assign gpr_wdata_o = gpr_wdata_q;
+    assign pc_set_data_o = pc_set_data_q;
 
     assign dbg_mem_req_o = dbg_mem_busy_q;
     assign dbg_mem_we_o = dbg_mem_we_q;
@@ -332,6 +371,7 @@ module debug_uart_agent #(
         halt_req_o <= 1'b0;
         resume_req_o <= 1'b0;
         step_req_o <= 1'b0;
+        pc_set_req_o <= 1'b0;
         gpr_we_o <= 1'b0;
 
         if (rst) begin
@@ -361,9 +401,17 @@ module debug_uart_agent #(
 
             mem_timeout_ctr_q <= 32'h0000_0000;
             mem_cmd_is_read_q <= 1'b0;
+            mem_burst_active_q <= 1'b0;
+            mem_burst_is_set_q <= 1'b0;
+            mem_burst_total_q <= 8'd0;
+            mem_burst_remaining_q <= 8'd0;
+            mem_burst_index_q <= 8'd0;
+            mem_burst_addr_q <= 32'h0000_0000;
+            mem_burst_value_q <= 32'h0000_0000;
 
             gpr_addr_q <= 4'h0;
             gpr_wdata_q <= 32'h0000_0000;
+            pc_set_data_q <= 32'h0000_0000;
 
             dbg_mem_busy_q <= 1'b0;
             dbg_mem_we_q <= 1'b0;
@@ -594,6 +642,19 @@ module debug_uart_agent #(
                                 state_q <= S_POLL_STATUS_REQ;
                             end
 
+                            CMD_SET_PC: begin
+                                if (cmd_len_q != 8'd4) begin
+                                    queue_response_no_payload(cmd_seq_q, ST_BAD_CMD);
+                                end else if (!core_halted_i) begin
+                                    queue_response_no_payload(cmd_seq_q, ST_NOT_HALTED);
+                                end else begin
+                                    pc_set_data_q <= payload_word_be(cmd_payload[0], cmd_payload[1], cmd_payload[2], cmd_payload[3]);
+                                    pc_set_req_o <= 1'b1;
+                                    queue_response_no_payload(cmd_seq_q, ST_OK);
+                                end
+                                state_q <= S_POLL_STATUS_REQ;
+                            end
+
                             CMD_READ_STATUS: begin
                                 status_payload_word = {
                                     24'h000000,
@@ -698,6 +759,73 @@ module debug_uart_agent #(
                                 state_q <= S_POLL_STATUS_REQ;
                             end
 
+                            CMD_READ_MEM_BURST: begin
+                                if (cmd_len_q != 8'd6) begin
+                                    queue_response_no_payload(cmd_seq_q, ST_BAD_CMD);
+                                    state_q <= S_POLL_STATUS_REQ;
+                                end else if (!core_halted_i) begin
+                                    queue_response_no_payload(cmd_seq_q, ST_NOT_HALTED);
+                                    state_q <= S_POLL_STATUS_REQ;
+                                end else if ((cmd_payload[5] == 8'd0) || (cmd_payload[5] > 8'd8)) begin
+                                    queue_response_no_payload(cmd_seq_q, ST_BAD_CMD);
+                                    state_q <= S_POLL_STATUS_REQ;
+                                end else begin
+                                    mem_addr_word = payload_word_be(cmd_payload[0], cmd_payload[1], cmd_payload[2], cmd_payload[3]);
+                                    mem_size_field = cmd_payload[4][1:0];
+                                    dbg_mem_addr_q <= mem_addr_word;
+                                    dbg_mem_wdata_q <= 32'h0000_0000;
+                                    dbg_mem_size_q <= (mem_size_field == 2'b00) ? SIZE_BYTE
+                                                     : (mem_size_field == 2'b01) ? SIZE_HALF
+                                                     : SIZE_WORD;
+                                    dbg_mem_we_q <= 1'b0;
+                                    dbg_mem_busy_q <= 1'b1;
+                                    mem_cmd_is_read_q <= 1'b1;
+                                    mem_timeout_ctr_q <= 32'h0000_0000;
+                                    mem_burst_active_q <= 1'b1;
+                                    mem_burst_is_set_q <= 1'b0;
+                                    mem_burst_total_q <= cmd_payload[5];
+                                    mem_burst_remaining_q <= cmd_payload[5];
+                                    mem_burst_index_q <= 8'd0;
+                                    mem_burst_addr_q <= mem_addr_word;
+                                    mem_burst_value_q <= 32'h0000_0000;
+                                    state_q <= S_MEM_WAIT;
+                                end
+                            end
+
+                            CMD_SET_MEM_BURST: begin
+                                if (cmd_len_q != 8'd10) begin
+                                    queue_response_no_payload(cmd_seq_q, ST_BAD_CMD);
+                                    state_q <= S_POLL_STATUS_REQ;
+                                end else if (!core_halted_i) begin
+                                    queue_response_no_payload(cmd_seq_q, ST_NOT_HALTED);
+                                    state_q <= S_POLL_STATUS_REQ;
+                                end else if (cmd_payload[5] == 8'd0) begin
+                                    queue_response_no_payload(cmd_seq_q, ST_BAD_CMD);
+                                    state_q <= S_POLL_STATUS_REQ;
+                                end else begin
+                                    mem_addr_word = payload_word_be(cmd_payload[0], cmd_payload[1], cmd_payload[2], cmd_payload[3]);
+                                    mem_size_field = cmd_payload[4][1:0];
+                                    mem_data_word = payload_word_be(cmd_payload[6], cmd_payload[7], cmd_payload[8], cmd_payload[9]);
+                                    dbg_mem_addr_q <= mem_addr_word;
+                                    dbg_mem_wdata_q <= mem_data_word;
+                                    dbg_mem_size_q <= (mem_size_field == 2'b00) ? SIZE_BYTE
+                                                     : (mem_size_field == 2'b01) ? SIZE_HALF
+                                                     : SIZE_WORD;
+                                    dbg_mem_we_q <= 1'b1;
+                                    dbg_mem_busy_q <= 1'b1;
+                                    mem_cmd_is_read_q <= 1'b0;
+                                    mem_timeout_ctr_q <= 32'h0000_0000;
+                                    mem_burst_active_q <= 1'b1;
+                                    mem_burst_is_set_q <= 1'b1;
+                                    mem_burst_total_q <= cmd_payload[5];
+                                    mem_burst_remaining_q <= cmd_payload[5];
+                                    mem_burst_index_q <= 8'd0;
+                                    mem_burst_addr_q <= mem_addr_word;
+                                    mem_burst_value_q <= mem_data_word;
+                                    state_q <= S_MEM_WAIT;
+                                end
+                            end
+
                             default: begin
                                 queue_response_no_payload(cmd_seq_q, ST_BAD_CMD);
                                 state_q <= S_POLL_STATUS_REQ;
@@ -727,17 +855,57 @@ module debug_uart_agent #(
 
                 S_MEM_WAIT: begin
                     if (dbg_mem_done_i) begin
-                        dbg_mem_busy_q <= 1'b0;
-                        if (dbg_mem_err_i) begin
+                        if (mem_burst_active_q) begin
+                            if (dbg_mem_err_i) begin
+                                dbg_mem_busy_q <= 1'b0;
+                                mem_burst_active_q <= 1'b0;
+                                queue_response_no_payload(cmd_seq_q, ST_BUS_ERR);
+                                state_q <= S_POLL_STATUS_REQ;
+                            end else begin
+                                if (!mem_burst_is_set_q) begin
+                                    tx_buf[(mem_burst_index_q * 8'd4) + 8'd0] <= dbg_mem_rdata_i[31:24];
+                                    tx_buf[(mem_burst_index_q * 8'd4) + 8'd1] <= dbg_mem_rdata_i[23:16];
+                                    tx_buf[(mem_burst_index_q * 8'd4) + 8'd2] <= dbg_mem_rdata_i[15:8];
+                                    tx_buf[(mem_burst_index_q * 8'd4) + 8'd3] <= dbg_mem_rdata_i[7:0];
+                                end
+
+                                if (mem_burst_remaining_q <= 8'd1) begin
+                                    dbg_mem_busy_q <= 1'b0;
+                                    mem_burst_active_q <= 1'b0;
+                                    if (mem_burst_is_set_q) begin
+                                        queue_response_no_payload(cmd_seq_q, ST_OK);
+                                    end else begin
+                                        queue_response_buffer(cmd_seq_q, ST_OK, mem_burst_total_q * 8'd4);
+                                    end
+                                    state_q <= S_POLL_STATUS_REQ;
+                                end else begin
+                                    mem_burst_addr_q <= mem_burst_addr_q + mem_stride_bytes(dbg_mem_size_q);
+                                    mem_burst_index_q <= mem_burst_index_q + 8'd1;
+                                    mem_burst_remaining_q <= mem_burst_remaining_q - 8'd1;
+                                    dbg_mem_addr_q <= mem_burst_addr_q + mem_stride_bytes(dbg_mem_size_q);
+                                    dbg_mem_wdata_q <= mem_burst_value_q;
+                                    dbg_mem_we_q <= mem_burst_is_set_q;
+                                    dbg_mem_busy_q <= 1'b1;
+                                    mem_timeout_ctr_q <= 32'h0000_0000;
+                                    state_q <= S_MEM_WAIT;
+                                end
+                            end
+                        end else if (dbg_mem_err_i) begin
+                            dbg_mem_busy_q <= 1'b0;
                             queue_response_no_payload(cmd_seq_q, ST_BUS_ERR);
+                            state_q <= S_POLL_STATUS_REQ;
                         end else if (mem_cmd_is_read_q) begin
+                            dbg_mem_busy_q <= 1'b0;
                             queue_response_word(cmd_seq_q, ST_OK, dbg_mem_rdata_i);
+                            state_q <= S_POLL_STATUS_REQ;
                         end else begin
+                            dbg_mem_busy_q <= 1'b0;
                             queue_response_no_payload(cmd_seq_q, ST_OK);
+                            state_q <= S_POLL_STATUS_REQ;
                         end
-                        state_q <= S_POLL_STATUS_REQ;
                     end else if (mem_timeout_ctr_q >= MEM_TIMEOUT_CYCLES) begin
                         dbg_mem_busy_q <= 1'b0;
+                        mem_burst_active_q <= 1'b0;
                         queue_response_no_payload(cmd_seq_q, ST_TIMEOUT);
                         state_q <= S_POLL_STATUS_REQ;
                     end else begin

@@ -18,6 +18,8 @@ module tb_debug_uart_claim;
     logic halt_req;
     logic resume_req;
     logic step_req;
+    logic pc_set_req;
+    logic [31:0] pc_set_data;
     logic [3:0] gpr_addr;
     logic [31:0] gpr_rdata;
     logic gpr_we;
@@ -159,6 +161,8 @@ module tb_debug_uart_claim;
         .halt_req_o             (halt_req),
         .resume_req_o           (resume_req),
         .step_req_o             (step_req),
+        .pc_set_req_o           (pc_set_req),
+        .pc_set_data_o          (pc_set_data),
         .gpr_addr_o             (gpr_addr),
         .gpr_rdata_i            (gpr_rdata),
         .gpr_we_o               (gpr_we),

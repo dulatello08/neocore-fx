@@ -73,6 +73,8 @@ module tb_mem;
         .dbg_halt_req_o(),
         .dbg_resume_req_o(),
         .dbg_step_req_o(),
+        .dbg_pc_set_req_o(),
+        .dbg_pc_set_data_o(),
         .dbg_gpr_addr_o(),
         .dbg_gpr_rdata_i(32'h0000_0000),
         .dbg_gpr_we_o(),
@@ -245,6 +247,12 @@ module tb_mem;
         check_eq32(rd, 32'h0000_0001, "UART CTRL write/readback matches");
         dbus_xact(1'b1, UART_BASE_ADDR + UART_CTRL_OFFSET, 32'h0000_0003, 4'b1111, rd, ack_seen, err_seen);
         check_true(ack_seen && !err_seen, "UART CTRL re-enable write acks");
+
+        dbus_xact(1'b1, UART_BASE_ADDR + UART_BAUDDIV_OFFSET, 32'h0000_1234, 4'b1111, rd, ack_seen, err_seen);
+        check_true(ack_seen && !err_seen, "UART BAUDDIV write acks in stream mode");
+        dbus_xact(1'b0, UART_BASE_ADDR + UART_BAUDDIV_OFFSET, 32'h0000_0000, 4'b1111, rd, ack_seen, err_seen);
+        check_true(ack_seen && !err_seen, "UART BAUDDIV read acks in stream mode");
+        check_eq32(rd, 32'h0000_0000, "UART BAUDDIV is not firmware-controlled in stream mode");
 
         dbus_xact(1'b1, UART_BASE_ADDR + UART_RXDATA_OFFSET, 32'h0000_005A, 4'b1111, rd, ack_seen, err_seen);
         check_true(ack_seen && !err_seen, "UART RX inject write acks");

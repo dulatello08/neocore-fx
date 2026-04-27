@@ -14,6 +14,8 @@ module neocorefx_core
   input  logic        dbg_halt_req_i,
   input  logic        dbg_resume_req_i,
   input  logic        dbg_step_req_i,
+  input  logic        dbg_pc_set_req_i,
+  input  logic [31:0] dbg_pc_set_i,
   input  logic [3:0]  dbg_gpr_addr_i,
   output logic [31:0] dbg_gpr_rdata_o,
   input  logic        dbg_gpr_we_i,
@@ -125,6 +127,11 @@ module neocorefx_core
   logic        ras_pop_valid;
 
   logic [31:0] if1_pc;
+  logic [31:0] dbg_pc_shadow_q;
+  logic        dbg_redirect_valid;
+  logic [31:0] dbg_redirect_pc;
+  logic        if1_redirect_valid;
+  logic [31:0] if1_redirect_pc;
 
   // ============================================================================
   // IF2 -> ID wires
@@ -244,6 +251,10 @@ module neocorefx_core
 
   assign core_halted = (dbg_state_q == DBG_HALTED);
   assign can_halt_boundary = wb_valid && !mem_wait_stall;
+  assign dbg_redirect_valid = dbg_pc_set_req_i && core_halted;
+  assign dbg_redirect_pc = {dbg_pc_set_i[31:2], 2'b00};
+  assign if1_redirect_valid = redirect_valid || dbg_redirect_valid;
+  assign if1_redirect_pc = redirect_valid ? redirect_pc : dbg_redirect_pc;
 
   // "Pulseflow" control style: frontend can freeze while backend drains.
   assign core_hold = !run_i || core_halted;
@@ -298,8 +309,8 @@ module neocorefx_core
     .clk                (clk),
     .rst                (rst),
     .stall_i            (if1_stall),
-    .redirect_valid_i   (redirect_valid),
-    .redirect_pc_i      (redirect_pc),
+    .redirect_valid_i   (if1_redirect_valid),
+    .redirect_pc_i      (if1_redirect_pc),
     .pred_valid_i       (pred_valid),
     .pred_taken_i       (pred_taken),
     .pred_target_i      (pred_target),
@@ -619,8 +630,18 @@ module neocorefx_core
     end
   end
 
+  always_ff @(posedge clk) begin
+    if (rst) begin
+      dbg_pc_shadow_q <= 32'h0000_0000;
+    end else if (dbg_redirect_valid) begin
+      dbg_pc_shadow_q <= dbg_redirect_pc;
+    end else if (!core_halted) begin
+      dbg_pc_shadow_q <= if1_pc;
+    end
+  end
+
   assign halted_o = core_halted;
-  assign current_pc_o = if1_pc;
+  assign current_pc_o = core_halted ? dbg_pc_shadow_q : if1_pc;
   assign dbg_gpr_rdata_o = dbg_gpr_rdata;
   assign dbg_halt_reason_o = halt_reason_q;
   assign dbg_last_fault_o = last_fault_q;

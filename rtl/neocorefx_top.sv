@@ -60,6 +60,8 @@ module neocorefx_top (
   logic        dbg_halt_req;
   logic        dbg_resume_req;
   logic        dbg_step_req;
+  logic        dbg_pc_set_req;
+  logic [31:0] dbg_pc_set_data;
   logic [3:0]  dbg_gpr_addr;
   logic [31:0] dbg_gpr_rdata;
   logic        dbg_gpr_we;
@@ -120,6 +122,8 @@ module neocorefx_top (
     .dbg_halt_req_i         (dbg_halt_req),
     .dbg_resume_req_i       (dbg_resume_req),
     .dbg_step_req_i         (dbg_step_req),
+    .dbg_pc_set_req_i       (dbg_pc_set_req),
+    .dbg_pc_set_i           (dbg_pc_set_data),
     .dbg_gpr_addr_i         (dbg_gpr_addr),
     .dbg_gpr_rdata_o        (dbg_gpr_rdata),
     .dbg_gpr_we_i           (dbg_gpr_we),
@@ -227,6 +231,8 @@ module neocorefx_top (
     .dbg_halt_req_o         (dbg_halt_req),
     .dbg_resume_req_o       (dbg_resume_req),
     .dbg_step_req_o         (dbg_step_req),
+    .dbg_pc_set_req_o       (dbg_pc_set_req),
+    .dbg_pc_set_data_o      (dbg_pc_set_data),
     .dbg_gpr_addr_o         (dbg_gpr_addr),
     .dbg_gpr_rdata_i        (dbg_gpr_rdata),
     .dbg_gpr_we_o           (dbg_gpr_we),

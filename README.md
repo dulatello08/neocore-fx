@@ -100,9 +100,11 @@ Implemented D-Bus MMIO decode includes UART at `0x4000_0000`.
 - `0x4000_0004` `RXDATA` (R/W): read received byte, or inject RX byte in simulation.
 - `0x4000_0008` `STATUS` (R/W1C): bit0 `TX_READY`, bit1 `RX_VALID`, bit2 `TX_OVERRUN`, bit3 `RX_OVERRUN`.
 - `0x4000_000C` `CTRL` (R/W): bit0 `TX_EN`, bit1 `RX_EN`.
-- `0x4000_0010` `BAUDDIV` (R/W): UART bit-period divider.
+- `0x4000_0010` `BAUDDIV`:
+  - physical UART endpoint (`STREAM_MODE=0`): R/W UART bit-period divider.
+  - firmware virtual UART endpoint (`STREAM_MODE=1`): writes ignored, reads return `0`.
 - `TXDATA` applies backpressure: if TX FIFO is full, the write is stalled until space is available (no byte drop).
-- Reset `BAUDDIV` defaults: synth/hardware `217` (25 MHz / 115200), simulation `8` for faster log throughput.
+- Reset `BAUDDIV` defaults: synth/hardware `39` (40 MHz / 1,000,000), simulation `8` for faster log throughput.
 
 For simulation logging, pass `+UART_STDOUT` (via `VVP_ARGS`) to mirror transmitted bytes to console.
 
@@ -115,12 +117,32 @@ Implemented hardware debug surface now includes:
 - Firmware-facing virtual UART console FIFO behind `ncdb`.
 - Parser rule: valid debug frames are consumed; everything else is passed to firmware RX.
 - Core debug controls: precise `halt` / `resume` / `step`, halted-only GPR/memory mutation, and mirrored performance counters.
+- Halted-only PC set support (`pc-set`) through both MMIO and UART debug transport.
+- `ncdb tui` integrated mode: one serial owner with human console pane plus debug command interface.
+- `ncdb tui` software breakpoints: host patches instruction words with `B .` (`0x40000000`) and restores originals.
 
 See:
 
 - [docs/debug-interface.md](docs/debug-interface.md)
 - [docs/debug_mmio.h](docs/debug_mmio.h)
 - `scripts/ncdb.py`
+
+Quick debug bring-up on hardware:
+
+```bash
+make fpga
+make fpga-program PROGRAM=mem/test_smoke.hex
+openFPGALoader -b ulx3s build/fpga/neocorefx_fpga_top.bit
+
+python3 scripts/ncdb.py --port /dev/ttyUSB0 hello
+python3 scripts/ncdb.py --port /dev/ttyUSB0 status
+python3 scripts/ncdb.py --port /dev/ttyUSB0 halt
+python3 scripts/ncdb.py --port /dev/ttyUSB0 pc-set 0x00000000
+python3 scripts/ncdb.py --port /dev/ttyUSB0 resume
+# native hardware burst debug commands (auto-chunked by ncdb when needed)
+python3 scripts/ncdb.py --port /dev/ttyUSB0 mem-read-burst 0x00000100 4 8
+python3 scripts/ncdb.py --port /dev/ttyUSB0 mem-set-burst 0x00000200 4 0xDEADBEEF 16
+```
 
 One-command generic loader helper:
 

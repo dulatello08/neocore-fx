@@ -130,6 +130,8 @@ module tb_biu;
         .dbg_halt_req_o(),
         .dbg_resume_req_o(),
         .dbg_step_req_o(),
+        .dbg_pc_set_req_o(),
+        .dbg_pc_set_data_o(),
         .dbg_gpr_addr_o(),
         .dbg_gpr_rdata_i(32'h0000_0000),
         .dbg_gpr_we_o(),

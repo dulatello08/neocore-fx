@@ -46,8 +46,8 @@ module uart_mmio #(
     localparam logic [5:0] UART_REG_BAUDDIV = UART_BAUDDIV_OFFSET[7:2];
 
 `ifdef SYNTHESIS
-    // 40 MHz fabric clock -> 115200 baud => divider ~= (40e6 / 115200) - 1 = 346.
-    localparam logic [31:0] UART_BAUDDIV_RESET = 32'd346;
+    // 40 MHz fabric clock -> 1,000,000 baud => divider = (40e6 / 1e6) - 1 = 39.
+    localparam logic [31:0] UART_BAUDDIV_RESET = 32'd39;
 `else
     // Faster default for simulation so benchmark logging does not dominate runtime.
     localparam logic [31:0] UART_BAUDDIV_RESET = 32'd8;
@@ -448,9 +448,13 @@ module uart_mmio #(
 
                     UART_REG_BAUDDIV: begin
                         if (req_we_n) begin
-                            bauddiv_n = mem_apply_write_sel(bauddiv_n, req_wdata_n, req_sel_n);
+                            if (!STREAM_MODE) begin
+                                bauddiv_n = mem_apply_write_sel(bauddiv_n, req_wdata_n, req_sel_n);
+                            end
                         end else begin
-                            rdata_n = bauddiv_n;
+                            // Stream-mode virtual UART is byte-stream based and has no baud timing.
+                            // Keep the physical UART divider private to ncdb ownership.
+                            rdata_n = STREAM_MODE ? 32'h0000_0000 : bauddiv_n;
                         end
                         ack_n = 1'b1;
                         req_valid_n = 1'b0;
