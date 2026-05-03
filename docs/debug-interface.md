@@ -1,6 +1,7 @@
 # NeoCoreFX Hardware Debug Interface (v2)
 
-Status: ncdb-first transport with permanent front-end UART ownership.
+Status: optional ncdb-first transport with permanent front-end UART ownership
+when `INCLUDE_DEBUG=1`.
 
 ## Goals
 
@@ -10,8 +11,16 @@ Status: ncdb-first transport with permanent front-end UART ownership.
 
 ## Architecture
 
-- `ncdb` logic (`rtl/debug_uart_agent.sv`) always owns the physical UART pins.
-- Firmware accesses a virtual UART MMIO console endpoint (same MMIO map at `0x4000_0000`).
+- `rtl/mem.sv` is the SoC memory/MMIO fabric and owns debug integration.
+- `rtl/debug_uart_agent.sv` implements the external UART debug front end.
+- `rtl/debug_mmio.sv` implements the CPU-visible firmware debug register block.
+- `rtl/uart_mmio.sv` is reused for both the virtual firmware console and the
+  physical UART endpoint.
+
+When `INCLUDE_DEBUG=1`:
+
+- `ncdb` logic always owns the physical UART pins.
+- Firmware accesses a virtual UART MMIO console endpoint at `0x4000_0000`.
 - `ncdb` bridges traffic between host and firmware console:
   - Host RX: valid debug frames are consumed by `ncdb`; all other bytes are forwarded to firmware RX.
   - Firmware TX: bytes are forwarded out through `ncdb` to host TX.
@@ -20,6 +29,13 @@ This creates two logical planes over one wire:
 
 - Debug control plane: framed binary protocol.
 - Firmware console plane: normal UART byte stream.
+
+When `INCLUDE_DEBUG=0`:
+
+- `debug_mmio` and `debug_uart_agent` are not instantiated.
+- `0x4000_0300` is unmapped and D-Bus accesses return an error.
+- Core debug control outputs from the memory fabric are tied inactive.
+- Firmware UART at `0x4000_0000` is a normal physical UART endpoint.
 
 ## Core Halt/Step Semantics
 
@@ -33,6 +49,9 @@ This creates two logical planes over one wire:
 - `ncdb` host tool default baud is also 1,000,000 bps.
 
 ## MMIO Register Map (`0x4000_0300`)
+
+This map exists only when `INCLUDE_DEBUG=1`. It is CPU-visible firmware MMIO,
+not the host `ncdb` UART frame protocol.
 
 - `0x00` `DBG_ID` (`"NCDB"`)
 - `0x04` `DBG_CAPS`
@@ -105,8 +124,9 @@ Parser rule:
 
 ## Software Helpers
 
-- C header: [`docs/debug_mmio.h`](debug_mmio.h)
-- Host utility: `scripts/ncdb.py`
+- Firmware C header for CPU-visible debug MMIO: [`docs/debug_mmio.h`](debug_mmio.h)
+- Host utility for the UART frame protocol: `scripts/ncdb.py`
+- Host implementation package: `scripts/ncdb_lib/`
 
 Examples:
 

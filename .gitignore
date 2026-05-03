@@ -2,3 +2,19 @@ build/
 *.vcd
 *.bin
 .DS_Store
+
+# Python cache/artifacts
+__pycache__/
+*.py[cod]
+
+# Verification/simulation outputs
+*.vvp
+*.fst
+*.wdb
+*.jou
+*.log
+
+# Editor temp files
+*.swp
+*.swo
+*~

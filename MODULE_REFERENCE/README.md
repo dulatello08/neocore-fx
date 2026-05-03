@@ -8,7 +8,7 @@ This directory contains module-level references for the NeoCoreFX RTL.
 ## Core Integration
 
 - `neocorefx_core.sv`: Main 6-stage integrated core.
-- [neocorefx_top.sv](neocorefx_top.md): Core + BIU + BRAM wrapper.
+- [neocorefx_top.sv](neocorefx_top.md): Core + BIU + SoC memory/MMIO wrapper.
 - [neocorefx_fpga_top.sv](neocorefx_fpga_top.md): FPGA/board top-level wrapper.
 
 ## Pipeline Stages
@@ -27,6 +27,7 @@ This directory contains module-level references for the NeoCoreFX RTL.
 - [biu.sv](biu.md)
 - [mem_pkg.sv](mem_pkg.md)
 - [mem.sv](mem.md)
+- All synthesizable RTL is kept in `.sv` files (no `.svh` behavioral chunks).
 
 ## Auxiliary Blocks
 
@@ -47,6 +48,11 @@ neocorefx_fpga_top
     │   └── regfile
     ├── biu
     └── mem
+        ├── mem_bram
+        ├── uart_mmio u_uart_console
+        ├── debug_mmio          (when INCLUDE_DEBUG=1)
+        ├── debug_uart_agent    (when INCLUDE_DEBUG=1)
+        └── uart_mmio u_uart_phy (when INCLUDE_DEBUG=1)
 ```
 
 ## Related Docs

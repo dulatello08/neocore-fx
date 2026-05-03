@@ -1,25 +1,41 @@
-# mem.sv - Memory Model
+# mem.sv - SoC Memory/MMIO Fabric
 
 > [!TIP]
 > Module Index: [README.md](README.md)
 
 ## Overview
 
-`mem` is a dual-port 32-bit word array memory model used by testbenches.
+`mem` is the SoC memory fabric. It connects the BIU I/D buses to BRAM, UART
+MMIO, and the optional hardware debug plane.
 
 ## Module: `mem`
 
 ### Interfaces
 
-- I-Bus port: read-only, word-aligned fetch.
-- D-Bus port: read/write with byte-lane selects.
+- I-Bus port: read-only instruction fetch into `mem_bram`.
+- D-Bus port: core load/store access to BRAM and MMIO.
+- Core debug status/control ports.
+- Board UART RX/TX pins.
 
 ### Main Behaviors
 
-- I-Bus and D-Bus responses are registered (1-cycle behavior).
-- I-Bus flags misaligned or out-of-range access as error.
-- D-Bus applies lane-merge writes through `mem_apply_write_sel` from [mem_pkg.md](mem_pkg.md).
+- Decodes BRAM at `0x0000_0000`.
+- Decodes firmware UART MMIO at `0x4000_0000`.
+- Decodes debug MMIO at `0x4000_0300` only when `INCLUDE_DEBUG=1`.
+- Arbitrates halted-only debug memory masters behind core traffic.
+- Routes the firmware UART either through `ncdb` virtual streaming
+  (`INCLUDE_DEBUG=1`) or directly to the physical UART (`INCLUDE_DEBUG=0`).
+
+### Debug Configuration
+
+- `INCLUDE_DEBUG=1`: instantiates `debug_mmio`, `debug_uart_agent`, virtual
+  firmware UART, and physical UART owned by `ncdb`.
+- `INCLUDE_DEBUG=0`: does not instantiate debug blocks, leaves `0x4000_0300`
+  unmapped, ties core debug control outputs inactive, and uses `u_uart_console`
+  as the physical UART.
 
 ## Notes
 
-Memory initializes to zero on startup for deterministic simulation.
+The public module file is intentionally short. Implementation chunks live under
+`rtl/memory/` so the source tree exposes the fabric area without creating a
+single oversized file.

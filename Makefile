@@ -54,6 +54,10 @@ MEM_FILELIST ?= filelists/sim_mem.f
 MEM_TOP ?= tb_mem
 MEM_BUILD_DIR ?= $(BUILD_ROOT)/sim_mem
 MEM_BIN ?= $(MEM_BUILD_DIR)/tb_mem_simv
+MEM_NODEBUG_FILELIST ?= filelists/sim_mem_nodebug.f
+MEM_NODEBUG_TOP ?= tb_mem_nodebug
+MEM_NODEBUG_BUILD_DIR ?= $(BUILD_ROOT)/sim_mem_nodebug
+MEM_NODEBUG_BIN ?= $(MEM_NODEBUG_BUILD_DIR)/tb_mem_nodebug_simv
 MEM_RANDOM_WORDHEX ?= $(MEM_BUILD_DIR)/mem_random.wordhex
 MEM_RANDOM_BANK_PREFIX ?= $(MEM_BUILD_DIR)/mem_random
 
@@ -118,10 +122,10 @@ endif
 
 FPGA_EXTRA_FLAGS += --seed $(NEXTPNR_SEED) --report $(FPGA_BUILD_DIR)/report_$(NEXTPNR_SEED).json
 
-.PHONY: help check-sim check-fpga dirs build run waves list \
+.PHONY: help check-sim check-fpga check-no-svh dirs build run waves list \
 	core-smoke-build core-smoke-run core-any-build core-any-run \
 	forward-hazard-build forward-hazard-run \
-	mem-build mem-run run_mem run_mem_random \
+	mem-build mem-run mem-nodebug-build mem-nodebug-run run_mem run_mem_nodebug run_mem_random \
 	frontend-timing-build frontend-timing-run \
 	debug-mmio-build debug-mmio-run debug-uart-router-build debug-uart-router-run \
 	run_smoke run_any run_forward_hazard run_frontend_timing run_debug_mmio run_debug_uart_router run_debug_uart_claim profile_any debug_any waves_any \
@@ -136,6 +140,7 @@ help:
 	@printf "  $(CLR_GREEN)make run_smoke$(CLR_RESET)  Build + run integrated core smoke TB\n"
 	@printf "  $(CLR_GREEN)make run_any$(CLR_RESET)    Run generic TB with PROGRAM=<byte-hex>\n"
 	@printf "  $(CLR_GREEN)make run_mem$(CLR_RESET)    Run memory+UART unit test TB\n"
+	@printf "  $(CLR_GREEN)make run_mem_nodebug$(CLR_RESET) Run memory fabric with debug structurally removed\n"
 	@printf "  $(CLR_GREEN)make run_mem_random$(CLR_RESET) Run memory TB with randomized BRAM init image\n"
 	@printf "  $(CLR_GREEN)make run_forward_hazard$(CLR_RESET) Run forwarding-hazard regression TB\n"
 	@printf "  $(CLR_GREEN)make run_frontend_timing$(CLR_RESET) Run frontend stall+redirect timing TB\n"
@@ -171,6 +176,14 @@ check-sim:
 	@command -v $(PYTHON) >/dev/null
 	@command -v $(IVERILOG) >/dev/null
 	@command -v $(VVP) >/dev/null
+	@$(MAKE) --no-print-directory check-no-svh
+
+check-no-svh:
+	@if find rtl tb filelists -type f -name '*.svh' | grep -q .; then \
+		echo "ERROR: .svh files are banned. Convert to .sv modules/files."; \
+		find rtl tb filelists -type f -name '*.svh'; \
+		exit 1; \
+	fi
 
 check-fpga:
 	@command -v $(PYTHON) >/dev/null
@@ -179,6 +192,7 @@ check-fpga:
 	@command -v $(NEXTPNR) >/dev/null
 	@command -v $(ECPPACK) >/dev/null
 	@command -v $(ECPBRAM) >/dev/null
+	@$(MAKE) --no-print-directory check-no-svh
 
 dirs:
 	@mkdir -p $(SIM_BUILD_DIR) $(FPGA_BUILD_DIR) $(WAVE_DIR)
@@ -278,6 +292,26 @@ mem-run: mem-build
 		--vvp-args "$(VVP_ARGS)"
 
 run_mem: mem-run
+
+mem-nodebug-build: check-sim
+	$(call banner,MEM NODEBUG TB BUILD)
+	@mkdir -p $(MEM_NODEBUG_BUILD_DIR)
+	@$(PYTHON) $(SIM_HELPER) build \
+		--filelist $(MEM_NODEBUG_FILELIST) \
+		--out $(MEM_NODEBUG_BIN) \
+		--top $(MEM_NODEBUG_TOP) \
+		--iverilog $(IVERILOG) \
+		--flags "$(IVERILOG_FLAGS)" \
+		--build-dir $(MEM_NODEBUG_BUILD_DIR)
+
+mem-nodebug-run: mem-nodebug-build
+	$(call banner,MEM NODEBUG TB RUN)
+	@$(PYTHON) $(SIM_HELPER) run \
+		--sim $(MEM_NODEBUG_BIN) \
+		--vvp $(VVP) \
+		--vvp-args "$(VVP_ARGS)"
+
+run_mem_nodebug: mem-nodebug-run
 
 run_mem_random: check-sim check-fpga
 	$(call banner,MEM TB RANDOM INIT)

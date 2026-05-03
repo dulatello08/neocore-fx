@@ -110,7 +110,15 @@ For simulation logging, pass `+UART_STDOUT` (via `VVP_ARGS`) to mirror transmitt
 
 ## Hardware Debug Interface (v2)
 
-Implemented hardware debug surface now includes:
+Debug is structurally optional at the SoC boundary. `neocorefx_top` and
+`neocorefx_fpga_top` expose `INCLUDE_DEBUG`:
+
+- `INCLUDE_DEBUG=1` keeps the full `ncdb` debug plane and makes firmware UART
+  a virtual stream endpoint behind the debug agent.
+- `INCLUDE_DEBUG=0` removes the CPU-visible debug MMIO decode, ties core debug
+  controls inactive, and connects firmware directly to the physical UART.
+
+With debug included, the hardware debug surface includes:
 
 - Debug MMIO register block at `0x4000_0300` (`docs/debug_mmio.h`).
 - External UART debug agent (`ncdb`) that permanently owns physical UART pins.
@@ -125,7 +133,9 @@ See:
 
 - [docs/debug-interface.md](docs/debug-interface.md)
 - [docs/debug_mmio.h](docs/debug_mmio.h)
-- `scripts/ncdb.py`
+- `scripts/ncdb.py` command wrapper and `scripts/ncdb_lib/` implementation package.
+
+Regression coverage includes `make run_mem_nodebug` for the no-debug fabric.
 
 Quick debug bring-up on hardware:
 
