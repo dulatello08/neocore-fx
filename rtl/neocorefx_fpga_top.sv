@@ -3,7 +3,9 @@
 // NeoCoreFX - ULX3S board-level top
 //
 
-module neocorefx_fpga_top (
+module neocorefx_fpga_top #(
+  parameter bit INCLUDE_DEBUG = 1'b1
+) (
   // Board clock and button inputs.
   input  logic       clk_25mhz,
   input  logic [6:0] btn,
@@ -78,7 +80,9 @@ module neocorefx_fpga_top (
     end
   end
 
-  neocorefx_top u_soc (
+  neocorefx_top #(
+    .INCLUDE_DEBUG(INCLUDE_DEBUG)
+  ) u_soc (
     .clk                    (clk_40mhz),
     .rst_btn_n              (soc_rst_btn_n),
     .uart_rx_i              (ftdi_txd),

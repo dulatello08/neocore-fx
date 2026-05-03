@@ -234,12 +234,12 @@ module tb_core_any;
                dut.u_mem.dbus_ack, dut.u_mem.dbus_err, dut.u_mem.dbus_sel,
                dut.u_mem.dbus_addr, dut.u_mem.dbus_wdata, dut.u_mem.dbus_rdata);
       $display("       uart req=%b req_valid=%b wait_rel=%b wait_cyc=%b ack=%b err=%b tx_count=%0d tx_active=%b tx_bit=%0d baud=%0d ctrl=0x%08h",
-               dut.u_mem.uart_req, dut.u_mem.u_uart.req_valid_q,
-               dut.u_mem.u_uart.req_wait_release_q, dut.u_mem.u_uart.req_wait_cycle_q,
-               dut.u_mem.u_uart.ack_o, dut.u_mem.u_uart.err_o,
-               dut.u_mem.u_uart.tx_count_q, dut.u_mem.u_uart.tx_active_q,
-               dut.u_mem.u_uart.tx_bit_idx_q, dut.u_mem.u_uart.bauddiv_q,
-               dut.u_mem.u_uart.ctrl_q);
+               dut.u_mem.m_sel_uart, dut.u_mem.u_uart_console.req_valid_q,
+               dut.u_mem.u_uart_console.req_wait_release_q, dut.u_mem.u_uart_console.req_wait_cycle_q,
+               dut.u_mem.u_uart_console.ack_o, dut.u_mem.u_uart_console.err_o,
+               dut.u_mem.u_uart_console.tx_count_q, dut.u_mem.u_uart_console.tx_active_q,
+               dut.u_mem.u_uart_console.tx_bit_idx_q, dut.u_mem.u_uart_console.bauddiv_q,
+               dut.u_mem.u_uart_console.ctrl_q);
     end
   end
 
@@ -339,7 +339,7 @@ module tb_core_any;
     end
 
     uart_drain_cycles = 0;
-    while ((dut.u_mem.u_uart.tx_active_q || (dut.u_mem.u_uart.tx_count_q != 0))
+    while ((dut.u_mem.u_uart_console.tx_active_q || (dut.u_mem.u_uart_console.tx_count_q != 0))
         && (uart_drain_cycles < max_cycles)) begin
       @(posedge clk);
       uart_drain_cycles = uart_drain_cycles + 1;

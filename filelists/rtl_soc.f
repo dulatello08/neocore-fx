@@ -1,4 +1,4 @@
-+incdir+../rtl
+-f rtl_mem.f
 ../rtl/core_pkg.sv
 ../rtl/regfile.sv
 ../rtl/if1_stage.sv
@@ -10,3 +10,8 @@
 ../rtl/exe_stage.sv
 ../rtl/mem_stage.sv
 ../rtl/wb_stage.sv
+../rtl/biu.sv
+../rtl/neocorefx_core_control.sv
+../rtl/neocorefx_core_stages.sv
+../rtl/neocorefx_core.sv
+../rtl/neocorefx_top.sv

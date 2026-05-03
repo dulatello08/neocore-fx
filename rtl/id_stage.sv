@@ -1,19 +1,17 @@
 //
 // id_stage.sv
-// NeoCoreFX - ID (decode + hazard detect + ID/EX register + halt tagging)
+// NeoCoreFX - ID wrapper (decode + hazards + ID/EX pipeline register)
 //
 
 module id_stage
   import core_pkg::*;
 (
-    // Clock/reset and pipeline control.
     input  logic        clk,
     input  logic        rst,
     input  logic        stall_i,
     input  logic        flush_i,
     input  logic        bubble_i,
 
-    // IF2 pipeline inputs.
     input  logic        if2_valid_i,
     input  logic [31:0] if2_pc_i,
     input  logic [31:0] if2_inst_i,
@@ -21,27 +19,22 @@ module id_stage
     input  logic [31:0] if2_pred_target_i,
     input  logic        if2_fetch_fault_i,
 
-    // Register file interface.
     output logic [3:0]  rf_rs1_addr_o,
     output logic [3:0]  rf_rs2_addr_o,
     input  logic [31:0] rf_rs1_data_i,
     input  logic [31:0] rf_rs2_data_i,
 
-    // Execute-stage hazard/forward context.
     input  logic        exe_valid_i,
     input  logic [3:0]  exe_rd_i,
     input  logic        exe_reg_write_i,
     input  logic        exe_mem_read_i,
 
-    // Memory-stage hazard/forward context.
     input  logic        mem_valid_i,
     input  logic [3:0]  mem_rd_i,
     input  logic        mem_reg_write_i,
 
-    // Stall request for load-use hazard.
     output logic        load_use_stall_o,
 
-    // ID -> EXE pipeline outputs.
     output logic        idex_valid_o,
     output logic [31:0] idex_pc_o,
     output logic [3:0]  idex_rd_o,
@@ -63,7 +56,6 @@ module id_stage
     output logic        idex_is_jalr_o,
     output logic        idex_is_lui_o,
     output logic        idex_is_lpc_o,
-    // Halt metadata for `B .` alias.
     output logic        idex_is_halt_o,
     output logic        idex_pred_taken_o,
     output logic [31:0] idex_pred_target_o,
@@ -75,410 +67,136 @@ module id_stage
     timeunit 1ns;
     timeprecision 1ps;
 
-    logic [3:0]  class_d;
-    logic [3:0]  op_d;
     logic [3:0]  rd_d;
     logic [3:0]  rs1_d;
     logic [3:0]  rs2_d;
-    logic [11:0] ext12_d;
-    logic [15:0] imm16_d;
-    logic [15:0] imm16_split_d;
-    logic [19:0] off20_d;
-
-    logic rs1_used_d;
-    logic rs2_used_d;
-
-    logic [31:0]      imm_d;
+    logic        rs1_used_d;
+    logic        rs2_used_d;
+    logic [31:0] imm_d;
     alu_op_t     alu_op_d;
     branch_t     branch_type_d;
+    logic        alu_src_imm_d;
+    logic        mem_read_d;
+    logic        mem_write_d;
+    mem_size_t   mem_size_d;
+    logic        load_sign_ext_d;
+    logic        reg_write_d;
+    logic        is_jal_d;
+    logic        is_jalr_d;
+    logic        is_lui_d;
+    logic        is_lpc_d;
+    logic        is_halt_d;
+    logic        illegal_d;
     fwd_sel_t    fwd_rs1_sel_d;
     fwd_sel_t    fwd_rs2_sel_d;
-    mem_size_t   mem_size_d;
 
-    logic alu_src_imm_d;
-    logic mem_read_d;
-    logic mem_write_d;
-    logic load_sign_ext_d;
-    logic reg_write_d;
-    logic is_jal_d;
-    logic is_jalr_d;
-    logic is_lui_d;
-    logic is_lpc_d;
-    logic is_halt_d;
-    logic illegal_d;
+    id_stage_decode u_decode (
+        .if2_inst_i       (if2_inst_i),
+        .rf_rs1_addr_o    (rf_rs1_addr_o),
+        .rf_rs2_addr_o    (rf_rs2_addr_o),
+        .rd_o             (rd_d),
+        .rs1_o            (rs1_d),
+        .rs2_o            (rs2_d),
+        .rs1_used_o       (rs1_used_d),
+        .rs2_used_o       (rs2_used_d),
+        .imm_o            (imm_d),
+        .alu_op_o         (alu_op_d),
+        .branch_type_o    (branch_type_d),
+        .alu_src_imm_o    (alu_src_imm_d),
+        .mem_read_o       (mem_read_d),
+        .mem_write_o      (mem_write_d),
+        .mem_size_o       (mem_size_d),
+        .load_sign_ext_o  (load_sign_ext_d),
+        .reg_write_o      (reg_write_d),
+        .is_jal_o         (is_jal_d),
+        .is_jalr_o        (is_jalr_d),
+        .is_lui_o         (is_lui_d),
+        .is_lpc_o         (is_lpc_d),
+        .is_halt_o        (is_halt_d),
+        .illegal_o        (illegal_d)
+    );
 
-    assign class_d = if2_inst_i[31:28];
-    assign op_d = if2_inst_i[27:24];
-    assign rd_d = if2_inst_i[23:20];
-    assign rs1_d = if2_inst_i[19:16];
-    assign rs2_d = if2_inst_i[15:12];
-    assign ext12_d = if2_inst_i[11:0];
-    assign imm16_d = if2_inst_i[15:0];
-    assign imm16_split_d = {if2_inst_i[23:20], if2_inst_i[11:0]};
-    assign off20_d = if2_inst_i[19:0];
+    id_stage_hazards u_hazards (
+        .illegal_i        (illegal_d),
+        .if2_valid_i      (if2_valid_i),
+        .rs1_i            (rs1_d),
+        .rs2_i            (rs2_d),
+        .rs1_used_i       (rs1_used_d),
+        .rs2_used_i       (rs2_used_d),
+        .mem_write_i      (mem_write_d),
+        .exe_valid_i      (exe_valid_i),
+        .exe_rd_i         (exe_rd_i),
+        .exe_reg_write_i  (exe_reg_write_i),
+        .exe_mem_read_i   (exe_mem_read_i),
+        .mem_valid_i      (mem_valid_i),
+        .mem_rd_i         (mem_rd_i),
+        .mem_reg_write_i  (mem_reg_write_i),
+        .load_use_stall_o (load_use_stall_o),
+        .fwd_rs1_sel_o    (fwd_rs1_sel_d),
+        .fwd_rs2_sel_o    (fwd_rs2_sel_d)
+    );
 
-    always_comb begin
-
-        rf_rs1_addr_o = rs1_d;
-        rf_rs2_addr_o = rs2_d;
-
-        rs1_used_d = 1'b0;
-        rs2_used_d = 1'b0;
-        imm_d = 32'h0000_0000;
-        alu_op_d = ALU_ADD;
-        branch_type_d = BR_NONE;
-        alu_src_imm_d = 1'b0;
-        mem_read_d = 1'b0;
-        mem_write_d = 1'b0;
-        mem_size_d = SIZE_WORD;
-        load_sign_ext_d = 1'b0;
-        reg_write_d = 1'b0;
-        is_jal_d = 1'b0;
-        is_jalr_d = 1'b0;
-        is_lui_d = 1'b0;
-        is_lpc_d = 1'b0;
-        is_halt_d = 1'b0;
-        illegal_d = 1'b0;
-
-        if (if2_inst_i != 32'h0000_0000) begin
-            case (class_d)
-                4'h0: begin
-                    rs1_used_d = 1'b1;
-                    rs2_used_d = 1'b1;
-                    reg_write_d = 1'b1;
-
-                    if (ext12_d != 12'h000) begin
-                        illegal_d = 1'b1;
-                    end
-
-                    case (op_d)
-                        4'h1: alu_op_d = ALU_ADD;
-                        4'h2: alu_op_d = ALU_SUB;
-                        4'h3: alu_op_d = ALU_AND;
-                        4'h4: alu_op_d = ALU_OR;
-                        4'h5: alu_op_d = ALU_XOR;
-                        4'h6: alu_op_d = ALU_SLT;
-                        4'h7: alu_op_d = ALU_SLTU;
-                        4'h8: alu_op_d = ALU_SLL;
-                        4'h9: alu_op_d = ALU_SRL;
-                        4'hA: alu_op_d = ALU_SRA;
-                        4'hB: alu_op_d = ALU_MUL;
-                        4'hC: alu_op_d = ALU_MULH;
-                        4'hD: alu_op_d = ALU_MULHU;
-                        4'hE: alu_op_d = ALU_MULHSU;
-                        default: illegal_d = 1'b1;
-                    endcase
-                end
-
-                4'h1: begin
-                    rs1_used_d = 1'b1;
-                    reg_write_d = 1'b1;
-                    alu_src_imm_d = 1'b1;
-
-                    case (op_d)
-                        4'h0: begin
-                            alu_op_d = ALU_ADD;
-                            imm_d = sext16(imm16_d);
-                        end
-                        4'h1: begin
-                            alu_op_d = ALU_AND;
-                            imm_d = zext16(imm16_d);
-                        end
-                        4'h2: begin
-                            alu_op_d = ALU_OR;
-                            imm_d = zext16(imm16_d);
-                        end
-                        4'h3: begin
-                            alu_op_d = ALU_XOR;
-                            imm_d = zext16(imm16_d);
-                        end
-                        4'h4: begin
-                            is_lui_d = 1'b1;
-                            rs1_used_d = 1'b0;
-                            imm_d = zext16(imm16_d);
-                            if (rs1_d != 4'h0) begin
-                                illegal_d = 1'b1;
-                            end
-                        end
-                        4'h5: begin
-                            alu_op_d = ALU_SLL;
-                            imm_d = {27'h0, imm16_d[4:0]};
-                            if (imm16_d[15:5] != 11'h000) begin
-                                illegal_d = 1'b1;
-                            end
-                        end
-                        4'h6: begin
-                            alu_op_d = ALU_SRL;
-                            imm_d = {27'h0, imm16_d[4:0]};
-                            if (imm16_d[15:5] != 11'h000) begin
-                                illegal_d = 1'b1;
-                            end
-                        end
-                        4'h7: begin
-                            alu_op_d = ALU_SRA;
-                            imm_d = {27'h0, imm16_d[4:0]};
-                            if (imm16_d[15:5] != 11'h000) begin
-                                illegal_d = 1'b1;
-                            end
-                        end
-                        default: illegal_d = 1'b1;
-                    endcase
-                end
-
-                4'h2: begin
-                    rs1_used_d = 1'b1;
-                    reg_write_d = 1'b1;
-                    mem_read_d = 1'b1;
-                    alu_src_imm_d = 1'b1;
-                    alu_op_d = ALU_ADD;
-                    imm_d = sext16(imm16_d);
-
-                    case (op_d)
-                        4'h0: begin
-                            mem_size_d = SIZE_BYTE;
-                            load_sign_ext_d = 1'b1;
-                        end
-                        4'h1: begin
-                            mem_size_d = SIZE_BYTE;
-                            load_sign_ext_d = 1'b0;
-                        end
-                        4'h2: begin
-                            mem_size_d = SIZE_HALF;
-                            load_sign_ext_d = 1'b1;
-                        end
-                        4'h3: begin
-                            mem_size_d = SIZE_HALF;
-                            load_sign_ext_d = 1'b0;
-                        end
-                        4'h4: begin
-                            mem_size_d = SIZE_WORD;
-                            load_sign_ext_d = 1'b0;
-                        end
-                        default: illegal_d = 1'b1;
-                    endcase
-                end
-
-                4'h3: begin
-                    rs1_used_d = 1'b1;
-                    rs2_used_d = 1'b1;
-                    mem_write_d = 1'b1;
-                    alu_src_imm_d = 1'b1;
-                    alu_op_d = ALU_ADD;
-                    imm_d = sext16(imm16_split_d);
-
-                    case (op_d)
-                        4'h0: mem_size_d = SIZE_BYTE;
-                        4'h1: mem_size_d = SIZE_HALF;
-                        4'h2: mem_size_d = SIZE_WORD;
-                        default: illegal_d = 1'b1;
-                    endcase
-                end
-
-                4'h4: begin
-                    rs1_used_d = 1'b1;
-                    rs2_used_d = 1'b1;
-                    imm_d = sext16_shift2(imm16_split_d);
-
-                    case (op_d)
-                        4'h0: begin
-                            branch_type_d = BR_UNCOND;
-                            rs1_used_d = 1'b0;
-                            rs2_used_d = 1'b0;
-                            if ((rs1_d != 4'h0) || (rs2_d != 4'h0)) begin
-                                illegal_d = 1'b1;
-                            end else if (imm16_split_d == 16'h0000) begin
-                                // HALT alias: B . (branch to current PC).
-                                is_halt_d = 1'b1;
-                            end
-                        end
-                        4'h1: branch_type_d = BR_EQ;
-                        4'h2: branch_type_d = BR_NE;
-                        4'h3: branch_type_d = BR_LT;
-                        4'h4: branch_type_d = BR_LTU;
-                        default: illegal_d = 1'b1;
-                    endcase
-                end
-
-                4'h5: begin
-                    reg_write_d = 1'b1;
-
-                    case (op_d)
-                        4'h0: begin
-                            is_jal_d = 1'b1;
-                            imm_d = sext20_shift2(off20_d);
-                        end
-                        4'h1: begin
-                            is_jalr_d = 1'b1;
-                            rs1_used_d = 1'b1;
-                            imm_d = sext16(imm16_d);
-                        end
-                        4'h2: begin
-                            is_lpc_d = 1'b1;
-                            imm_d = sext20_shift2(off20_d);
-                        end
-                        default: illegal_d = 1'b1;
-                    endcase
-                end
-
-                default: illegal_d = 1'b1;
-            endcase
-        end
-    end
-
-    always_comb begin
-        // Store data (rs2) is consumed in MEM stage and can be corrected by the
-        // dedicated WB->MEM store-data forward path, so do not interlock that
-        // dependency here.
-        load_use_stall_o = !illegal_d
-                        && if2_valid_i
-                        && exe_valid_i
-                        && exe_mem_read_i
-                        && (exe_rd_i != 4'h0)
-                        && ((rs1_used_d && (exe_rd_i == rs1_d))
-                         || (rs2_used_d && !mem_write_d && (exe_rd_i == rs2_d)));
-
-        fwd_rs1_sel_d = FWD_NONE;
-        if (!illegal_d && rs1_used_d && (rs1_d != 4'h0)) begin
-            if (exe_valid_i && exe_reg_write_i && !exe_mem_read_i
-             && (exe_rd_i == rs1_d) && (exe_rd_i != 4'h0)) begin
-                fwd_rs1_sel_d = FWD_MEM;
-            end else if (mem_valid_i && mem_reg_write_i
-                      && (mem_rd_i == rs1_d) && (mem_rd_i != 4'h0)) begin
-                fwd_rs1_sel_d = FWD_WB;
-            end
-        end
-
-        fwd_rs2_sel_d = FWD_NONE;
-        if (!illegal_d && rs2_used_d && (rs2_d != 4'h0)) begin
-            if (exe_valid_i && exe_reg_write_i && !exe_mem_read_i
-             && (exe_rd_i == rs2_d) && (exe_rd_i != 4'h0)) begin
-                fwd_rs2_sel_d = FWD_MEM;
-            end else if (mem_valid_i && mem_reg_write_i
-                      && (mem_rd_i == rs2_d) && (mem_rd_i != 4'h0)) begin
-                fwd_rs2_sel_d = FWD_WB;
-            end
-        end
-    end
-
-    always_ff @(posedge clk) begin
-        if (rst) begin
-            idex_valid_o         <= 1'b0;
-            idex_pc_o            <= 32'h0000_0000;
-            idex_rd_o            <= 4'h0;
-            idex_rs1_addr_o      <= 4'h0;
-            idex_rs2_addr_o      <= 4'h0;
-            idex_rs1_data_o      <= 32'h0000_0000;
-            idex_rs2_data_o      <= 32'h0000_0000;
-            idex_inst_o          <= 32'h0000_0000;
-            idex_imm_o           <= 32'h0000_0000;
-            idex_alu_op_o        <= ALU_ADD;
-            idex_alu_src_imm_o   <= 1'b0;
-            idex_mem_read_o      <= 1'b0;
-            idex_mem_write_o     <= 1'b0;
-            idex_mem_size_o      <= SIZE_WORD;
-            idex_load_sign_ext_o <= 1'b0;
-            idex_reg_write_o     <= 1'b0;
-            idex_branch_type_o   <= BR_NONE;
-            idex_is_jal_o        <= 1'b0;
-            idex_is_jalr_o       <= 1'b0;
-            idex_is_lui_o        <= 1'b0;
-            idex_is_lpc_o        <= 1'b0;
-            idex_is_halt_o       <= 1'b0;
-            idex_pred_taken_o    <= 1'b0;
-            idex_pred_target_o   <= 32'h0000_0000;
-            idex_fetch_fault_o   <= 1'b0;
-            idex_fwd_rs1_sel_o   <= FWD_NONE;
-            idex_fwd_rs2_sel_o   <= FWD_NONE;
-            idex_illegal_o       <= 1'b0;
-        end else if (flush_i) begin
-            idex_valid_o         <= 1'b0;
-            idex_pc_o            <= 32'h0000_0000;
-            idex_rd_o            <= 4'h0;
-            idex_rs1_addr_o      <= 4'h0;
-            idex_rs2_addr_o      <= 4'h0;
-            idex_rs1_data_o      <= 32'h0000_0000;
-            idex_rs2_data_o      <= 32'h0000_0000;
-            idex_inst_o          <= 32'h0000_0000;
-            idex_imm_o           <= 32'h0000_0000;
-            idex_alu_op_o        <= ALU_ADD;
-            idex_alu_src_imm_o   <= 1'b0;
-            idex_mem_read_o      <= 1'b0;
-            idex_mem_write_o     <= 1'b0;
-            idex_mem_size_o      <= SIZE_WORD;
-            idex_load_sign_ext_o <= 1'b0;
-            idex_reg_write_o     <= 1'b0;
-            idex_branch_type_o   <= BR_NONE;
-            idex_is_jal_o        <= 1'b0;
-            idex_is_jalr_o       <= 1'b0;
-            idex_is_lui_o        <= 1'b0;
-            idex_is_lpc_o        <= 1'b0;
-            idex_is_halt_o       <= 1'b0;
-            idex_pred_taken_o    <= 1'b0;
-            idex_pred_target_o   <= 32'h0000_0000;
-            idex_fetch_fault_o   <= 1'b0;
-            idex_fwd_rs1_sel_o   <= FWD_NONE;
-            idex_fwd_rs2_sel_o   <= FWD_NONE;
-            idex_illegal_o       <= 1'b0;
-        end else if (!stall_i) begin
-            if (bubble_i) begin
-                idex_valid_o         <= 1'b0;
-                idex_pc_o            <= 32'h0000_0000;
-                idex_rd_o            <= 4'h0;
-                idex_rs1_addr_o      <= 4'h0;
-                idex_rs2_addr_o      <= 4'h0;
-                idex_rs1_data_o      <= 32'h0000_0000;
-                idex_rs2_data_o      <= 32'h0000_0000;
-                idex_inst_o          <= 32'h0000_0000;
-                idex_imm_o           <= 32'h0000_0000;
-                idex_alu_op_o        <= ALU_ADD;
-                idex_alu_src_imm_o   <= 1'b0;
-                idex_mem_read_o      <= 1'b0;
-                idex_mem_write_o     <= 1'b0;
-                idex_mem_size_o      <= SIZE_WORD;
-                idex_load_sign_ext_o <= 1'b0;
-                idex_reg_write_o     <= 1'b0;
-                idex_branch_type_o   <= BR_NONE;
-                idex_is_jal_o        <= 1'b0;
-                idex_is_jalr_o       <= 1'b0;
-                idex_is_lui_o        <= 1'b0;
-                idex_is_lpc_o        <= 1'b0;
-                idex_is_halt_o       <= 1'b0;
-                idex_pred_taken_o    <= 1'b0;
-                idex_pred_target_o   <= 32'h0000_0000;
-                idex_fetch_fault_o   <= 1'b0;
-                idex_fwd_rs1_sel_o   <= FWD_NONE;
-                idex_fwd_rs2_sel_o   <= FWD_NONE;
-                idex_illegal_o       <= 1'b0;
-            end else begin
-                idex_valid_o         <= if2_valid_i;
-                idex_pc_o            <= if2_pc_i;
-                idex_rd_o            <= rd_d;
-                idex_rs1_addr_o      <= rs1_d;
-                idex_rs2_addr_o      <= rs2_d;
-                idex_rs1_data_o      <= rf_rs1_data_i;
-                idex_rs2_data_o      <= rf_rs2_data_i;
-                idex_inst_o          <= if2_inst_i;
-                idex_imm_o           <= imm_d;
-                idex_alu_op_o        <= alu_op_d;
-                idex_alu_src_imm_o   <= alu_src_imm_d;
-                idex_mem_read_o      <= mem_read_d && !illegal_d;
-                idex_mem_write_o     <= mem_write_d && !illegal_d;
-                idex_mem_size_o      <= mem_size_d;
-                idex_load_sign_ext_o <= load_sign_ext_d;
-                idex_reg_write_o     <= reg_write_d && !illegal_d;
-                idex_branch_type_o   <= illegal_d ? BR_NONE : branch_type_d;
-                idex_is_jal_o        <= is_jal_d && !illegal_d;
-                idex_is_jalr_o       <= is_jalr_d && !illegal_d;
-                idex_is_lui_o        <= is_lui_d && !illegal_d;
-                idex_is_lpc_o        <= is_lpc_d && !illegal_d;
-                idex_is_halt_o       <= is_halt_d && !illegal_d;
-                idex_pred_taken_o    <= if2_pred_taken_i;
-                idex_pred_target_o   <= if2_pred_target_i;
-                idex_fetch_fault_o   <= if2_fetch_fault_i;
-                idex_fwd_rs1_sel_o   <= fwd_rs1_sel_d;
-                idex_fwd_rs2_sel_o   <= fwd_rs2_sel_d;
-                idex_illegal_o       <= illegal_d;
-            end
-        end
-    end
+    id_stage_pipe_reg u_pipe_reg (
+        .clk                (clk),
+        .rst                (rst),
+        .stall_i            (stall_i),
+        .flush_i            (flush_i),
+        .bubble_i           (bubble_i),
+        .if2_valid_i        (if2_valid_i),
+        .if2_pc_i           (if2_pc_i),
+        .if2_inst_i         (if2_inst_i),
+        .if2_pred_taken_i   (if2_pred_taken_i),
+        .if2_pred_target_i  (if2_pred_target_i),
+        .if2_fetch_fault_i  (if2_fetch_fault_i),
+        .rd_i               (rd_d),
+        .rs1_i              (rs1_d),
+        .rs2_i              (rs2_d),
+        .rf_rs1_data_i      (rf_rs1_data_i),
+        .rf_rs2_data_i      (rf_rs2_data_i),
+        .imm_i              (imm_d),
+        .alu_op_i           (alu_op_d),
+        .alu_src_imm_i      (alu_src_imm_d),
+        .mem_read_i         (mem_read_d),
+        .mem_write_i        (mem_write_d),
+        .mem_size_i         (mem_size_d),
+        .load_sign_ext_i    (load_sign_ext_d),
+        .reg_write_i        (reg_write_d),
+        .branch_type_i      (branch_type_d),
+        .is_jal_i           (is_jal_d),
+        .is_jalr_i          (is_jalr_d),
+        .is_lui_i           (is_lui_d),
+        .is_lpc_i           (is_lpc_d),
+        .is_halt_i          (is_halt_d),
+        .illegal_i          (illegal_d),
+        .fwd_rs1_sel_i      (fwd_rs1_sel_d),
+        .fwd_rs2_sel_i      (fwd_rs2_sel_d),
+        .idex_valid_o       (idex_valid_o),
+        .idex_pc_o          (idex_pc_o),
+        .idex_rd_o          (idex_rd_o),
+        .idex_rs1_addr_o    (idex_rs1_addr_o),
+        .idex_rs2_addr_o    (idex_rs2_addr_o),
+        .idex_rs1_data_o    (idex_rs1_data_o),
+        .idex_rs2_data_o    (idex_rs2_data_o),
+        .idex_inst_o        (idex_inst_o),
+        .idex_imm_o         (idex_imm_o),
+        .idex_alu_op_o      (idex_alu_op_o),
+        .idex_alu_src_imm_o (idex_alu_src_imm_o),
+        .idex_mem_read_o    (idex_mem_read_o),
+        .idex_mem_write_o   (idex_mem_write_o),
+        .idex_mem_size_o    (idex_mem_size_o),
+        .idex_load_sign_ext_o(idex_load_sign_ext_o),
+        .idex_reg_write_o   (idex_reg_write_o),
+        .idex_branch_type_o (idex_branch_type_o),
+        .idex_is_jal_o      (idex_is_jal_o),
+        .idex_is_jalr_o     (idex_is_jalr_o),
+        .idex_is_lui_o      (idex_is_lui_o),
+        .idex_is_lpc_o      (idex_is_lpc_o),
+        .idex_is_halt_o     (idex_is_halt_o),
+        .idex_pred_taken_o  (idex_pred_taken_o),
+        .idex_pred_target_o (idex_pred_target_o),
+        .idex_fetch_fault_o (idex_fetch_fault_o),
+        .idex_fwd_rs1_sel_o (idex_fwd_rs1_sel_o),
+        .idex_fwd_rs2_sel_o (idex_fwd_rs2_sel_o),
+        .idex_illegal_o     (idex_illegal_o)
+    );
 endmodule

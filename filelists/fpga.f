@@ -1,19 +1,3 @@
-../rtl/core_pkg.sv
-../rtl/mem_pkg.sv
-../rtl/regfile.sv
-../rtl/if1_stage.sv
-../rtl/if2_stage.sv
-../rtl/id_stage.sv
-../rtl/exe_stage.sv
-../rtl/mem_stage.sv
-../rtl/wb_stage.sv
-../rtl/biu.sv
-../rtl/mem_bram.sv
-../rtl/uart_mmio.sv
-../rtl/debug_mmio.sv
-../rtl/debug_uart_agent.sv
-../rtl/mem.sv
-../rtl/neocorefx_core.sv
-../rtl/neocorefx_top.sv
+-f rtl_soc.f
 ../rtl/neocorefx_pll_40mhz.sv
 ../rtl/neocorefx_fpga_top.sv

@@ -3,7 +3,9 @@
 // NeoCoreFX - Integrated core + BIU + BRAM top wrapper
 //
 
-module neocorefx_top (
+module neocorefx_top #(
+  parameter bit INCLUDE_DEBUG = 1'b1
+) (
   // Clock/reset controls.
   input  logic       clk,
   input  logic       rst_btn_n,
@@ -197,7 +199,9 @@ module neocorefx_top (
     .dbus_err               (dbus_err)
   );
 
-  mem u_mem (
+  mem #(
+    .INCLUDE_DEBUG(INCLUDE_DEBUG)
+  ) u_mem (
     .clk                    (clk),
     .rst                    (rst),
     .ibus_cyc               (ibus_cyc),
@@ -215,7 +219,7 @@ module neocorefx_top (
     .dbus_ack               (dbus_ack),
     .dbus_rdata             (dbus_rdata),
     .dbus_err               (dbus_err),
-    .debug_enable_i         (1'b1),
+    .debug_enable_i         (INCLUDE_DEBUG),
     .core_halted_i          (halted),
     .core_current_pc_i      (current_pc),
     .core_halt_reason_i     (dbg_halt_reason),

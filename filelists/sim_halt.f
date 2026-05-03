@@ -1,4 +1,8 @@
++incdir+../rtl
 ../rtl/core_pkg.sv
+../rtl/id_stage_decode.sv
+../rtl/id_stage_hazards.sv
+../rtl/id_stage_pipe_reg.sv
 ../rtl/id_stage.sv
 ../rtl/exe_stage.sv
 ../rtl/mem_stage.sv
