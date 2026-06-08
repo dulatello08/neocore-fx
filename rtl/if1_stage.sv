@@ -1,0 +1,90 @@
+//
+// if1_stage.sv
+// NeoCoreFX - IF1 (PC select + fetch request)
+//
+
+module if1_stage #(
+    parameter logic [31:0] RESET_PC = 32'h0000_0000
+) (
+    // Clock/reset and upstream flow control.
+    input  logic        clk,
+    input  logic        rst,
+    input  logic        stall_i,
+
+    // Redirect path from execute stage.
+    input  logic        redirect_valid_i,
+    input  logic [31:0] redirect_pc_i,
+
+    // Static predictor input from IF2.
+    input  logic        pred_valid_i,
+    input  logic        pred_taken_i,
+    input  logic [31:0] pred_target_i,
+
+    // BIU instruction request output.
+    output logic        i_req_o,
+    output logic [31:0] i_addr_o,
+
+    // IF1 -> IF2 pipeline outputs.
+    output logic        if2_valid_o,
+    output logic [31:0] if2_pc_o,
+    output logic        if2_pred_taken_o,
+
+    // Current architectural PC.
+    output logic [31:0] pc_o
+);
+    timeunit 1ns;
+    timeprecision 1ps;
+
+    logic [31:0] pc_q;
+    logic [31:0] fetch_pc;
+    logic        pred_take;
+    logic        redirect_pending_q;
+    logic [31:0] redirect_pending_pc_q;
+
+    always_comb begin
+        pred_take = pred_valid_i
+                 && pred_taken_i
+                 && !redirect_pending_q
+                 && !redirect_valid_i;
+        fetch_pc = pc_q;
+
+        if (redirect_pending_q) begin
+            fetch_pc = redirect_pending_pc_q;
+        end else if (redirect_valid_i) begin
+            fetch_pc = redirect_pc_i;
+        end else if (pred_take) begin
+            fetch_pc = pred_target_i;
+        end
+    end
+
+    assign i_req_o  = !rst && !stall_i;
+    assign i_addr_o = fetch_pc;
+    assign pc_o     = pc_q;
+
+    always_ff @(posedge clk) begin
+        if (rst) begin
+            pc_q             <= RESET_PC;
+            if2_valid_o      <= 1'b0;
+            if2_pc_o         <= RESET_PC;
+            if2_pred_taken_o <= 1'b0;
+            redirect_pending_q <= 1'b0;
+            redirect_pending_pc_q <= RESET_PC;
+        end else begin
+            if (redirect_valid_i) begin
+                redirect_pending_q <= 1'b1;
+                redirect_pending_pc_q <= redirect_pc_i;
+            end
+
+            if (!stall_i) begin
+                if2_valid_o      <= 1'b1;
+                if2_pc_o         <= fetch_pc;
+                if2_pred_taken_o <= pred_take;
+                pc_q             <= fetch_pc + 32'd4;
+
+                if (redirect_pending_q || redirect_valid_i) begin
+                    redirect_pending_q <= 1'b0;
+                end
+            end
+        end
+    end
+endmodule

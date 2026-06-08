@@ -1,35 +1,76 @@
-# NeoCoreFX
+# NeoCoreFX RTL
 
-WIP!!
+NeoCoreFX RTL, testbenches, and build tooling.
 
-NeoCore-FX RTL and testbench code are licensed under Apache License 2.0.
-The NeoCore-FX and NeoCore16x32 toolchain is licensed separately under GPL-3.0.
-See the LICENSE files in each repository for details.
+## Documentation
+
+- Docs hub: [DOCS_INDEX.md](DOCS_INDEX.md)
+- Verification guide: [TESTING_AND_VERIFICATION.md](TESTING_AND_VERIFICATION.md)
+- Simulation runbook: [docs/simulation-workflow.md](docs/simulation-workflow.md)
+
+## License
+
+NeoCore-FX RTL and testbench code are licensed under Apache License 2.0.  
+The NeoCore-FX / NeoCore16x32 toolchain is licensed separately under GPL-3.0.
 
 ## Directory Layout
 
 ```text
 .
 ├── Makefile
+├── MODULE_REFERENCE/
 ├── docs/
 ├── filelists/
 │   ├── sim.f
+│   ├── sim_core.f
+│   ├── sim_core_smoke.f
+│   ├── sim_core_any.f
+│   ├── sim_forwarding_hazard.f
+│   ├── sim_frontend_timing.f
+│   ├── sim_biu.f
+│   ├── sim_mem.f
+│   ├── sim_halt.f
+│   ├── sim_pipe.f
 │   └── fpga.f
+├── mem/
+│   ├── *.hex (test_smoke.hex, test_halt.hex, coremark.hex, etc.)
+│   └── README.md
 ├── rtl/
-│   ├── ncfx_counter.sv
+│   ├── core_pkg.sv
+│   ├── mem_pkg.sv
+│   ├── regfile.sv
+│   ├── if1_stage.sv
+│   ├── if2_stage.sv
+│   ├── id_stage.sv
+│   ├── exe_stage.sv
+│   ├── mem_stage.sv
+│   ├── wb_stage.sv
+│   ├── biu.sv
+│   ├── mem.sv
+│   ├── neocorefx_core.sv
 │   ├── neocorefx_top.sv
 │   └── neocorefx_fpga_top.sv
 ├── tb/
 │   ├── tb_pkg.sv
-│   ├── tb_clock_reset.sv
-│   ├── test_smoke.sv
-│   └── tb_neocorefx_top.sv
+│   ├── tb_core_smoke.sv
+│   ├── tb_core_any.sv
+│   ├── tb_forwarding_hazard.sv
+│   ├── tb_frontend_timing.sv
+│   ├── tb_biu.sv
+│   ├── tb_mem.sv
+│   ├── tb_halt_path.sv
+│   └── README.md
 ├── scripts/
-│   └── sim.py
+│   ├── sim.py
+│   ├── run_any.py
+│   ├── bin2hex.py
+│   └── wordhex_to_bytehex.py
 └── ulx3s-85f-min.lpf
 ```
 
 ## Simulation
+
+Default simulation target is the integrated core smoke testbench (`tb_core_smoke`) via `filelists/sim.f`.
 
 ```bash
 make run
@@ -37,10 +78,131 @@ make waves
 make list
 ```
 
+Integrated core workflows:
+
+```bash
+make run_smoke
+make run_forward_hazard
+make run_frontend_timing
+make run_any PROGRAM=mem/test_smoke.hex
+make run_any PROGRAM=mem/test_forwarding_hazard.hex
+make profile_any PROGRAM=mem/test_smoke.hex
+make debug_any PROGRAM=mem/test_smoke.hex
+make waves_any PROGRAM=mem/test_smoke.hex
+make run_any PROGRAM=mem/coremark.hex VVP_ARGS=+UART_STDOUT
+```
+
+## UART MMIO (Phase 2)
+
+Implemented D-Bus MMIO decode includes UART at `0x4000_0000`.
+
+- `0x4000_0000` `TXDATA` (W): write byte to TX FIFO.
+- `0x4000_0004` `RXDATA` (R/W): read received byte, or inject RX byte in simulation.
+- `0x4000_0008` `STATUS` (R/W1C): bit0 `TX_READY`, bit1 `RX_VALID`, bit2 `TX_OVERRUN`, bit3 `RX_OVERRUN`.
+- `0x4000_000C` `CTRL` (R/W): bit0 `TX_EN`, bit1 `RX_EN`.
+- `0x4000_0010` `BAUDDIV`:
+  - physical UART endpoint (`STREAM_MODE=0`): R/W UART bit-period divider.
+  - firmware virtual UART endpoint (`STREAM_MODE=1`): writes ignored, reads return `0`.
+- `TXDATA` applies backpressure: if TX FIFO is full, the write is stalled until space is available (no byte drop).
+- Reset `BAUDDIV` defaults: synth/hardware `39` (40 MHz / 1,000,000), simulation `8` for faster log throughput.
+
+For simulation logging, pass `+UART_STDOUT` (via `VVP_ARGS`) to mirror transmitted bytes to console.
+
+## Hardware Debug Interface (v2)
+
+Debug is structurally optional at the SoC boundary. `neocorefx_top` and
+`neocorefx_fpga_top` expose `INCLUDE_DEBUG`:
+
+- `INCLUDE_DEBUG=1` keeps the full `ncdb` debug plane and makes firmware UART
+  a virtual stream endpoint behind the debug agent.
+- `INCLUDE_DEBUG=0` removes the CPU-visible debug MMIO decode, ties core debug
+  controls inactive, and connects firmware directly to the physical UART.
+
+With debug included, the hardware debug surface includes:
+
+- Debug MMIO register block at `0x4000_0300` (`docs/debug_mmio.h`).
+- External UART debug agent (`ncdb`) that permanently owns physical UART pins.
+- Firmware-facing virtual UART console FIFO behind `ncdb`.
+- Parser rule: valid debug frames are consumed; everything else is passed to firmware RX.
+- Core debug controls: precise `halt` / `resume` / `step`, halted-only GPR/memory mutation, and mirrored performance counters.
+- Halted-only PC set support (`pc-set`) through both MMIO and UART debug transport.
+- `ncdb tui` integrated mode: one serial owner with human console pane plus debug command interface.
+- `ncdb tui` software breakpoints: host patches instruction words with `B .` (`0x40000000`) and restores originals.
+
+See:
+
+- [docs/debug-interface.md](docs/debug-interface.md)
+- [docs/debug_mmio.h](docs/debug_mmio.h)
+- `scripts/ncdb.py` command wrapper and `scripts/ncdb_lib/` implementation package.
+
+Regression coverage includes `make run_mem_nodebug` for the no-debug fabric.
+
+Quick debug bring-up on hardware:
+
+```bash
+make fpga
+make fpga-program PROGRAM=mem/test_smoke.hex
+openFPGALoader -b ulx3s build/fpga/neocorefx_fpga_top.bit
+
+python3 scripts/ncdb.py --port /dev/ttyUSB0 hello
+python3 scripts/ncdb.py --port /dev/ttyUSB0 status
+python3 scripts/ncdb.py --port /dev/ttyUSB0 halt
+python3 scripts/ncdb.py --port /dev/ttyUSB0 pc-set 0x00000000
+python3 scripts/ncdb.py --port /dev/ttyUSB0 resume
+# native hardware burst debug commands (auto-chunked by ncdb when needed)
+python3 scripts/ncdb.py --port /dev/ttyUSB0 mem-read-burst 0x00000100 4 8
+python3 scripts/ncdb.py --port /dev/ttyUSB0 mem-set-burst 0x00000200 4 0xDEADBEEF 16
+```
+
+One-command generic loader helper:
+
+```bash
+python3 scripts/run_any.py --program mem/test_smoke.hex --profile
+```
+
+Run the memory-only testbench:
+
+```bash
+python3 scripts/sim.py build \
+  --filelist filelists/sim_mem.f \
+  --out build/sim_mem/tb_mem_simv \
+  --top tb_mem \
+  --build-dir build/sim_mem
+
+python3 scripts/sim.py run --sim build/sim_mem/tb_mem_simv
+```
+
+Run the halt-path pipeline testbench (`B .` -> `halted`):
+
+```bash
+python3 scripts/sim.py build \
+  --filelist filelists/sim_halt.f \
+  --out build/sim_halt/tb_halt_path_simv \
+  --top tb_halt_path \
+  --build-dir build/sim_halt
+
+python3 scripts/sim.py run --sim build/sim_halt/tb_halt_path_simv
+```
+
+Program format conversion helpers:
+
+```bash
+python3 scripts/bin2hex.py input.bin mem/input.hex
+python3 scripts/wordhex_to_bytehex.py input_words.hex mem/input.hex
+python3 scripts/bytehex_to_wordhex.py mem/input.hex build/input.wordhex --depth 16384
+```
+
 ## FPGA Build (ULX3S 85F)
 
 ```bash
 make fpga
+make fpga-base-config
+make fpga-program PROGRAM=mem/dhrystone.hex
 make fpga-list
 ```
 
+`make fpga-base-config` builds and keeps a persistent `core_original.config`
+with garbage BRAM contents generated from `/dev/urandom`.
+`make fpga-program` converts program input to interleaved 32-bit bank files,
+then applies four explicit `ecpbram -v` passes (`bank0..bank3`) from garbage
+banks to program banks, and finally packs the patched config.

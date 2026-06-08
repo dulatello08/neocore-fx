@@ -1,3 +1,3 @@
-../rtl/ncfx_counter.sv
-../rtl/neocorefx_top.sv
+-f rtl_soc.f
+../rtl/neocorefx_pll_40mhz.sv
 ../rtl/neocorefx_fpga_top.sv
