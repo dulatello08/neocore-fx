@@ -219,11 +219,11 @@ module tb_core_any;
                dut.u_core.idex_valid, dut.u_core.idex_pc, dut.u_core.idex_imm,
                dut.u_core.idex_branch_type, dut.u_core.idex_pred_taken,
                dut.u_core.idex_is_jal, dut.u_core.idex_is_jalr,
-               dut.u_core.idex_rs1_data, dut.u_core.idex_rs2_data);
+               dut.u_core.u_stages.idex_rs1_data, dut.u_core.u_stages.idex_rs2_data);
       $display("       exe rs1_f=0x%08h rs2_f=0x%08h br_taken=%b act_taken=%b act_tgt=0x%08h redir_v=%b redir_pc=0x%08h mispred=%b",
-               dut.u_core.u_exe.rs1_final, dut.u_core.u_exe.rs2_final,
-               dut.u_core.u_exe.branch_taken, dut.u_core.u_exe.actual_taken,
-               dut.u_core.u_exe.actual_target, dut.u_core.redirect_valid,
+               dut.u_core.u_stages.u_exe.rs1_final, dut.u_core.u_stages.u_exe.rs2_final,
+               dut.u_core.u_stages.u_exe.branch_taken, dut.u_core.u_stages.u_exe.actual_taken,
+               dut.u_core.u_stages.u_exe.actual_target, dut.u_core.redirect_valid,
                dut.u_core.redirect_pc, dut.u_core.mispredict);
       $display("       stalls load=%0d mem=%0d redirects=%0d retired=%0d mem_wait=%b load_use=%b",
                load_stall_count, mem_stall_count,

@@ -64,6 +64,12 @@ def draw_line(stdscr, y: int, x: int, text: str, width: int) -> None:
         return
 
 
+def _feedback_rows(height: int, input_mode: str) -> int:
+    if input_mode == "cmd":
+        return max(8, min(18, height // 2))
+    return 4
+
+
 def render_screen(
     stdscr,
     last_status: dict[str, int],
@@ -99,7 +105,7 @@ def render_screen(
     draw_line(stdscr, 4, 0, "console mode: Enter sends line | cmd mode: Enter runs command", w - 1)
 
     input_rows = 2
-    log_rows = 4
+    log_rows = min(_feedback_rows(h, input_mode), max(3, h - 9))
     console_y0 = 6
     console_y1 = max(console_y0, h - input_rows - log_rows - 1)
     console_rows = max(1, console_y1 - console_y0 + 1)
@@ -110,8 +116,9 @@ def render_screen(
 
     log_y0 = console_y1 + 1
     draw_line(stdscr, log_y0, 0, "-" * max(0, w - 1), w - 1)
-    for i, ln in enumerate(log_lines[-(log_rows - 1) :]):
-        draw_line(stdscr, log_y0 + 1 + i, 0, ln, w - 1)
+    draw_line(stdscr, log_y0 + 1, 0, "command feedback", w - 1)
+    for i, ln in enumerate(log_lines[-(log_rows - 2) :]):
+        draw_line(stdscr, log_y0 + 2 + i, 0, ln, w - 1)
 
     input_prompt = "cmd> " if input_mode == "cmd" else "tx> "
     draw_line(stdscr, h - 2, 0, input_prompt + input_buf, w - 1)

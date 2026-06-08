@@ -21,9 +21,10 @@
 
 - `led[7]`: reset asserted
 - `led[6]`: heartbeat toggle
-- `led[5]`: halted
+- `led[5]`: PLL unlocked
 - `led[4]`: WB fault
-- `led[3:2]`: PC activity bits
+- `led[3]`: halted
+- `led[2]`: PC activity bit
 - `led[1]`: memory stall activity
 - `led[0]`: load-use stall activity
 

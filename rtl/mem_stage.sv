@@ -31,7 +31,7 @@ module mem_stage
     // WB forwarding for store-data hazards.
     input  logic        wb_fwd_valid_i,
     input  logic [3:0]  wb_fwd_rd_i,
-    input  logic [31:0] wb_fwd_data_i,
+    input  logic [31:0] wb_fwd_data_i,o
 
     // BIU D-port response.
     input  logic        d_done_i,
